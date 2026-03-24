@@ -38,7 +38,7 @@ const app = express();
 
 // ── CORS ───────────────────────────────────────────────────────
 app.use(cors({
-  origin: process.env.CLIENT_ORIGIN || "http://localhost:3000",
+  origin: "https://telecloud-tau.vercel.app" ,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
   allowedHeaders: [
     "Content-Type",
