@@ -1,8 +1,8 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'https://telecloud-d0rd.onrender.com',
-  timeout: 60000,
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000',
+  timeout: 0, // No timeout — large file uploads can take minutes
 })
 
 // Attach JWT to every request
@@ -40,12 +40,13 @@ export const authAPI = {
 // ── Files ─────────────────────────────────────────────────────────
 export const filesAPI = {
   list:       (params) => api.get('/api/files', { params }),
-  upload:     (formData, uploadId, onProgress) =>
-    api.post('/api/files/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data', 'X-Upload-Id': uploadId },
-      onUploadProgress: onProgress,
-    }),
-  download:   (id) => api.get(`/api/files/${id}/download`, { responseType: 'blob' }),
+  initUpload: (data) => api.post('/api/files/upload/init', data),
+  uploadChunk: (formData) => api.post('/api/files/upload/chunk', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 0,
+  }),
+  finalizeUpload: (data) => api.post('/api/files/upload/finalize', data),
+  downloadUrl:(id) => `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/files/${id}/download?token=${localStorage.getItem('token')}`,
   preview:    (id) => `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/files/${id}/preview`,
   thumbnail:  (id) => `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/files/${id}/thumbnail?token=${localStorage.getItem('token')}`,
   delete:     (id) => api.delete(`/api/files/${id}`),
@@ -72,6 +73,15 @@ export const shareAPI = {
   revoke: (token)   => api.delete(`/api/share/${token}`),
 }
 
+// ── Telegram Import ───────────────────────────────────────────────
+export const telegramAPI = {
+  listFiles:   (limit = 20, offsetId = 0) =>
+    api.get('/api/telegram/files', { params: { limit, offsetId } }),
+  importFile:  (messageId) =>
+    api.post('/api/telegram/import', { messageId }),
+  syncFiles:   () => api.get('/api/telegram/sync'),
+}
+
 // ── Public ────────────────────────────────────────────────────────
 export const publicAPI = {
   getInfo: (token, pwd) => axios.get(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/public/info/${token}`, {
@@ -82,6 +92,55 @@ export const publicAPI = {
 // ── Dashboard / Search ────────────────────────────────────────────
 export const dashboardAPI = { get:    () => api.get('/api/dashboard') }
 export const searchAPI    = { search: (q) => api.get('/api/search', { params: { q } }) }
+export const musicAPI     = {
+  search: (q, limit = 20) => api.get('/api/music/search', { params: { q, limit } }),
+  recommendations: (videoId, limit = 20) => api.get('/api/music/recommendations', { params: { videoId, limit } }),
+  personalized: (limit = 12) => api.get('/api/music/personalized', { params: { limit } }),
+  upNext: (videoId, limit = 12) => api.get('/api/music/upnext', { params: { videoId, limit } }),
+  related: (videoId, limit = 12) => api.get('/api/music/related', { params: { videoId, limit } }),
+  quickPicks: (videoId, limit = 10) => api.get('/api/music/quickpicks', { params: { videoId, limit } }),
+  historyQuickPicks: (limit = 12) => api.get('/api/music/history-quickpicks', { params: { limit } }),
+  categories: () => api.get('/api/music/categories'),
+  readyPlaylists: () => api.get('/api/music/ready-playlists'),
+  browsePlaylist: (playlistId, limit = 80, query = '') => api.get('/api/music/browse-playlist', { params: { playlistId, limit, query } }),
+  trending: (limit = 20) => api.get('/api/music/trending', { params: { limit } }),
+  lyrics: (videoId) => api.get('/api/music/lyrics', { params: { videoId } }),
+  history: () => api.get('/api/music/history'),
+  addHistory: (track) => api.post('/api/music/history', track),
+  trackAnalytics: (payload) => api.post('/api/music/analytics', payload),
+  favorites: () => api.get('/api/music/favorites'),
+  liked: () => api.get('/api/music/liked'),
+  like: (track) => api.post('/api/music/like', track),
+  toggleLike: (track) => api.post('/api/music/like', track),
+  toggleFavorite: (track) => api.post('/api/music/favorites/toggle', track),
+  playlists: () => api.get('/api/music/playlist'),
+  createPlaylist: (input) =>
+    api.post('/api/music/playlist', typeof input === 'string' ? { name: input } : input),
+  renamePlaylist: (id, name) => api.patch(`/api/music/playlist/${id}`, { name }),
+  deletePlaylist: (id) => api.delete(`/api/music/playlist/${id}`),
+  addToPlaylist: (id, track) => api.post(`/api/music/playlist/${id}/tracks`, track),
+  removeFromPlaylist: (id, videoId) => api.delete(`/api/music/playlist/${id}/tracks/${encodeURIComponent(videoId)}`),
+  
+  // Telegram-cached streaming (database-first approach)
+  // Includes auth token in URL for HTML5 audio element compatibility
+  streamUrl: (videoId) => {
+    const token = localStorage.getItem('token');
+    return `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/music/cached/stream?videoId=${encodeURIComponent(videoId)}${token ? `&token=${token}` : ''}`;
+  },
+  
+  // Alias kept for callers that still reference the legacy helper name
+  legacyStreamUrl: (videoId) =>
+    `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/music/cached/stream?videoId=${encodeURIComponent(videoId)}&token=${localStorage.getItem('token')}`,
+  
+  // Cached music endpoints (authenticated via API calls)
+  getCachedSong: (videoId) => api.get(`/api/music/cached/song?videoId=${encodeURIComponent(videoId)}`),
+  getSongStatus: (videoId) => api.get(`/api/music/cached/status?videoId=${encodeURIComponent(videoId)}`),
+  searchCached: (query, limit = 20) => api.get(`/api/music/cached/search?q=${encodeURIComponent(query)}&limit=${limit}`),
+  getCachedTrending: (limit = 20) => api.get(`/api/music/cached/trending?limit=${limit}`),
+  getRecentlyAdded: (limit = 20) => api.get(`/api/music/cached/recent?limit=${limit}`),
+  getMyUploads: (limit = 50) => api.get(`/api/music/cached/my-uploads?limit=${limit}`),
+  deleteCachedSong: (videoId) => api.delete(`/api/music/cached/${encodeURIComponent(videoId)}`),
+}
 export const paymentsAPI  = {
   createOrder:     (plan) => api.post('/api/payments/create-order', { plan }),
   verify:          (data) => api.post('/api/payments/verify', data),

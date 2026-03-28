@@ -1,0 +1,113 @@
+/* VideoPlayer.css - Modern skin for Video.js */
+
+.vjs-telecloud-skin {
+  /* Inherit tailwind rounding */
+  border-radius: 0.75rem; 
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  background-color: transparent !important;
+  font-family: inherit;
+}
+
+.vjs-telecloud-skin video {
+  border-radius: 0.75rem !important;
+  object-fit: contain;
+}
+
+/* Big Play Button */
+.vjs-telecloud-skin .vjs-big-play-button {
+  background-color: rgba(20, 20, 20, 0.6) !important;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: white !important;
+  border-radius: 50% !important;
+  width: 72px !important;
+  height: 72px !important;
+  line-height: 72px !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+  margin-top: -36px !important;
+  margin-left: -36px !important;
+}
+
+.vjs-telecloud-skin:hover .vjs-big-play-button,
+.vjs-telecloud-skin .vjs-big-play-button:focus {
+  background-color: rgba(99, 102, 241, 0.95) !important; /* Brand-500 */
+  border-color: rgba(99, 102, 241, 1) !important;
+  transform: scale(1.08);
+  box-shadow: 0 10px 30px -5px rgba(99, 102, 241, 0.6);
+}
+
+/* Control Bar Glassmorphism */
+.vjs-telecloud-skin .vjs-control-bar {
+  background: linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.4), transparent) !important;
+  height: 54px !important;
+  padding: 0 12px;
+  display: flex !important;
+  align-items: center;
+}
+
+/* Sliders */
+.vjs-telecloud-skin .vjs-slider {
+  background-color: rgba(255, 255, 255, 0.25) !important;
+  border-radius: 100px;
+}
+.vjs-telecloud-skin .vjs-load-progress {
+  background: rgba(255, 255, 255, 0.4) !important;
+}
+.vjs-telecloud-skin .vjs-play-progress,
+.vjs-telecloud-skin .vjs-volume-level {
+  background-color: #6366f1 !important; /* Brand-500 */
+  border-radius: 100px;
+}
+.vjs-telecloud-skin .vjs-play-progress:before {
+  font-size: 1.25em;
+  color: #fff;
+  top: 50%;
+  transform: translateY(-50%);
+  text-shadow: 0 0 5px rgba(0,0,0,0.5);
+}
+
+/* Buttons and Icons */
+.vjs-telecloud-skin .vjs-button > .vjs-icon-placeholder:before {
+  font-size: 1.7em;
+  line-height: 54px;
+}
+
+.vjs-telecloud-skin .vjs-button:hover {
+  text-shadow: 0 0 10px rgba(255,255,255,0.7);
+  transform: scale(1.05);
+  transition: transform 0.1s;
+}
+
+/* Time display formatting */
+.vjs-telecloud-skin .vjs-time-control {
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 54px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Style the default loading spinner somewhat to fit Telecloud */
+.vjs-telecloud-skin .vjs-loading-spinner {
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #6366f1; /* Brand-500 */
+  border-radius: 50%;
+}
+
+/* Modals/Menus */
+.vjs-telecloud-skin .vjs-menu-content {
+  background-color: rgba(20, 20, 25, 0.95) !important;
+  backdrop-filter: blur(12px);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.vjs-telecloud-skin .vjs-menu-item:hover,
+.vjs-telecloud-skin .vjs-menu-item:focus,
+.vjs-telecloud-skin .vjs-menu-item.vjs-selected {
+  background-color: #6366f1 !important;
+  color: white !important;
+}

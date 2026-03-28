@@ -2,9 +2,6 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Folder, MoreVertical, Pencil, Trash2, Share2, Star, Download } from 'lucide-react'
-import toast from 'react-hot-toast'
-import { useQueryClient } from '@tanstack/react-query'
-import { foldersAPI } from '../services/api'
 import { truncate, formatDateShort } from '../utils/helpers'
 
 export default function FolderCard({ folder, onDelete, onRename, onShare, onDownload, onFileDrop, onFolderDrop, onToggleStar }) {
@@ -51,7 +48,7 @@ export default function FolderCard({ folder, onDelete, onRename, onShare, onDown
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: dragOver ? 1.04 : 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      whileHover={{ y: -2 }}
+      whileHover={{ y: -6, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
       draggable
       onDragStart={(e) => {
         e.stopPropagation()
@@ -61,8 +58,8 @@ export default function FolderCard({ folder, onDelete, onRename, onShare, onDown
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`card p-4 cursor-pointer group relative hover:shadow-md transition-all select-none
-        ${dragOver ? 'ring-2 ring-indigo-500 shadow-lg shadow-indigo-500/30 bg-indigo-50 dark:bg-indigo-900/20' : ''}
+      className={`app-panel-muted cursor-pointer group relative select-none overflow-visible p-3.5 sm:p-4 transition-all
+        ${dragOver ? 'ring-2 ring-indigo-500 shadow-xl shadow-indigo-500/20 bg-indigo-50/80 dark:bg-indigo-900/30 border-indigo-500/50' : 'border-gray-200/60 dark:border-zinc-800/80'}
         ${menuOpen ? 'z-50' : 'z-0'}`}
       onDoubleClick={() => navigate(`/folder/${folder._id}`)}
     >
@@ -70,64 +67,66 @@ export default function FolderCard({ folder, onDelete, onRename, onShare, onDown
       <div className="absolute top-3 right-3 z-10 flex items-center gap-1" ref={menuRef}>
         {onToggleStar && (
           <button
-            className={`p-1.5 rounded-lg transition-colors ${folder.isStarred ? 'text-yellow-400 opacity-100' : 'text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+            className={`rounded-xl p-2 transition-all ${folder.isStarred ? 'text-yellow-500 opacity-100 bg-yellow-50 dark:bg-yellow-500/10' : 'text-zinc-400 opacity-100 hover:bg-gray-100 dark:hover:bg-zinc-800 md:opacity-0 md:group-hover:opacity-100'}`}
             onClick={(e) => { e.stopPropagation(); onToggleStar(folder, true) }}
           >
-            <Star size={15} fill={folder.isStarred ? 'currentColor' : 'none'} />
+            <Star size={14} fill={folder.isStarred ? 'currentColor' : 'none'} />
           </button>
         )}
         <button
-          className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-100 dark:hover:bg-gray-800"
+          className="rounded-xl p-2 opacity-100 transition-all hover:bg-gray-100 dark:hover:bg-zinc-800 md:opacity-0 md:group-hover:opacity-100"
           onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen) }}
         >
-          <MoreVertical size={15} className="text-gray-500" />
+          <MoreVertical size={14} className="text-zinc-500" />
         </button>
         {menuOpen && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: -4 }}
+            initial={{ opacity: 0, scale: 0.95, y: -8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="absolute right-0 top-8 w-36 card shadow-xl overflow-hidden z-20"
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            className="app-panel absolute right-0 top-10 z-[70] w-40 overflow-hidden rounded-[1.25rem]"
             onClick={e => e.stopPropagation()}
           >
             <button onClick={() => { navigate(`/folder/${folder._id}`); setMenuOpen(false) }}
-              className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800">
-              <Folder size={14} /> Open
+              className="flex items-center gap-3 w-full px-4 py-3 text-sm font-medium text-gray-700 dark:text-zinc-200 hover:bg-gray-50 dark:hover:bg-zinc-800/60 transition-colors">
+              <Folder size={16} /> Open
             </button>
             <button onClick={() => { onRename(folder); setMenuOpen(false) }}
-              className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800">
-              <Pencil size={14} /> Rename
+              className="flex items-center gap-3 w-full px-4 py-3 text-sm font-medium text-gray-700 dark:text-zinc-200 hover:bg-gray-50 dark:hover:bg-zinc-800/60 transition-colors">
+              <Pencil size={16} /> Rename
             </button>
             <button onClick={() => { onShare && onShare(folder); setMenuOpen(false) }}
-              className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800">
-              <Share2 size={14} /> Share
+              className="flex items-center gap-3 w-full px-4 py-3 text-sm font-medium text-gray-700 dark:text-zinc-200 hover:bg-gray-50 dark:hover:bg-zinc-800/60 transition-colors">
+              <Share2 size={16} /> Share
             </button>
             {onDownload && (
               <button onClick={(e) => { e.stopPropagation(); onDownload(folder); setMenuOpen(false) }}
-                className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800">
-                <Download size={14} /> Download
+                className="flex items-center gap-3 w-full px-4 py-3 text-sm font-medium text-gray-700 dark:text-zinc-200 hover:bg-gray-50 dark:hover:bg-zinc-800/60 transition-colors">
+                <Download size={16} /> Download
               </button>
             )}
+            <div className="h-px bg-gray-100 dark:bg-zinc-800 my-1" />
             <button onClick={() => { onDelete(folder); setMenuOpen(false) }}
-              className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">
-              <Trash2 size={14} /> Delete
+              className="flex items-center gap-3 w-full px-4 py-3 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
+              <Trash2 size={16} /> Delete
             </button>
           </motion.div>
         )}
       </div>
 
       {/* Icon */}
-      <div className="flex justify-center mb-3 mt-1">
-        <div className="w-14 h-14 rounded-xl flex items-center justify-center"
-             style={{ background: folder.color + '22' }}>
-          <Folder size={28} style={{ color: folder.color || '#6366f1' }} fill={folder.color || '#6366f1'} fillOpacity={0.2} />
+      <div className="mb-4 mt-3.5 flex justify-center">
+        <div className="flex h-[62px] w-[62px] items-center justify-center rounded-[1.2rem] transition-transform duration-300 group-hover:scale-110 shadow-inner"
+             style={{ background: `linear-gradient(135deg, ${folder.color}15, ${folder.color}30)` }}>
+          <Folder size={28} style={{ color: folder.color || '#6366f1' }} fill={folder.color || '#6366f1'} fillOpacity={0.25} />
         </div>
       </div>
 
       {/* Info */}
-      <p className="text-sm font-medium text-gray-800 dark:text-gray-100 text-center truncate mb-1">
+      <p className="mb-1 text-center text-[13px] font-bold tracking-tight text-gray-900 dark:text-zinc-100 truncate">
         {truncate(folder.name, 20)}
       </p>
-      <p className="text-xs text-gray-400 text-center">{formatDateShort(folder.createdAt)}</p>
+      <p className="text-center text-[10px] font-medium text-zinc-400">{formatDateShort(folder.createdAt)}</p>
     </motion.div>
   )
 }

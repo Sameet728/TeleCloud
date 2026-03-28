@@ -1,101 +1,162 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, Download, ZoomIn, ZoomOut, RotateCw, Volume2,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Maximize2
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { filesAPI } from '../services/api'
 import { getMimeCategory, formatBytes, formatDate } from '../utils/helpers'
 import FileIcon from '../utils/fileIcons'
 import { useTheme } from '../context/ThemeContext'
+import AdSlot, { useAdGuard } from './AdBanner'
+import DownloadAdGate from './DownloadAdGate'
+import VideoPlayer from './VideoPlayer'
+import UI_LAYERS from '../constants/uiLayers'
+
+// Lazy-loaded viewers (code-split to minimize initial bundle)
+const CodeViewer = lazy(() => import('./viewers/CodeViewer'))
+const SpreadsheetViewer = lazy(() => import('./viewers/SpreadsheetViewer'))
+const DocViewer = lazy(() => import('./viewers/DocViewer'))
+const AudioPlayerPro = lazy(() => import('./viewers/AudioPlayerPro'))
+const PdfViewerPro = lazy(() => import('./viewers/PdfViewerPro'))
+
+// Lazy fallback spinner
+const LazySpinner = ({ dark }) => (
+  <div className="flex items-center justify-center h-64">
+    <div className={`w-8 h-8 border-2 rounded-full animate-spin ${dark ? 'border-white/30 border-t-white' : 'border-gray-300 border-t-gray-600'}`}/>
+  </div>
+)
 
 // ── per-type palette ──────────────────────────────────────────────────
 const PALETTE = {
-  image:   { accent: '#22c55e',  label: 'Image' },
-  video:   { accent: '#a855f7',  label: 'Video' },
-  audio:   { accent: '#ec4899',  label: 'Audio' },
-  pdf:     { accent: '#ef4444',  label: 'PDF' },
-  doc:     { accent: '#3b82f6',  label: 'Document' },
-  sheet:   { accent: '#10b981', label: 'Spreadsheet' },
-  text:    { accent: '#6b7280',  label: 'Text' },
-  archive: { accent: '#f59e0b',  label: 'Archive' },
-  other:   { accent: '#8b5cf6',  label: 'File' },
+  image:        { accent: '#22c55e',  label: 'Image' },
+  video:        { accent: '#a855f7',  label: 'Video' },
+  audio:        { accent: '#ec4899',  label: 'Audio' },
+  pdf:          { accent: '#ef4444',  label: 'PDF' },
+  doc:          { accent: '#3b82f6',  label: 'Document' },
+  sheet:        { accent: '#10b981',  label: 'Spreadsheet' },
+  code:         { accent: '#6b7280',  label: 'Code' },
+  presentation: { accent: '#f97316',  label: 'Presentation' },
+  archive:      { accent: '#f59e0b',  label: 'Archive' },
+  other:        { accent: '#8b5cf6',  label: 'File' },
 }
 
-// ── Image viewer with zoom/rotate ─────────────────────────────────────
+// ── Image viewer with zoom/rotate/pan ─────────────────────────────────────
 function ImageViewer({ src, fileName, dark }) {
   const [scale, setScale]   = useState(1)
   const [rotate, setRotate] = useState(0)
+  const [flipH, setFlipH]   = useState(false)
+  const [flipV, setFlipV]   = useState(false)
   const [loading, setLoading] = useState(true)
+  const [dragStart, setDragStart] = useState(null)
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
 
-  // Reset when source changes (new file in slider)
-  useEffect(() => { setScale(1); setRotate(0); setLoading(true); }, [src])
+  useEffect(() => { setScale(1); setRotate(0); setFlipH(false); setFlipV(false); setLoading(true); setOffset({ x: 0, y: 0 }); }, [src])
 
-  const toolBtn = `p-1.5 rounded-lg transition-colors
-    ${dark
-      ? 'hover:bg-white/20 text-white'
-      : 'hover:bg-black/10 text-gray-700'}`
+  // Keyboard shortcuts for image
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === '+' || e.key === '=') { e.preventDefault(); setScale(s => Math.min(5, s + 0.25)) }
+      if (e.key === '-') { e.preventDefault(); setScale(s => Math.max(0.25, s - 0.25)) }
+      if (e.key === 'r' || e.key === 'R') { e.preventDefault(); setRotate(r => (r + 90) % 360) }
+      if (e.key === '0') { e.preventDefault(); setScale(1); setRotate(0); setOffset({ x: 0, y: 0 }) }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
-  return (
-    <div className="flex flex-col items-center gap-3 h-full">
-      <div className={`flex items-center gap-1 rounded-xl px-2 py-1
-        ${dark ? 'bg-white/10 backdrop-blur' : 'bg-black/8 backdrop-blur border border-black/10'}`}>
-        <button onClick={() => setScale(s => Math.max(0.25, s - 0.25))} className={toolBtn} title="Zoom out"><ZoomOut size={15}/></button>
-        <span className={`text-xs w-10 text-center select-none ${dark ? 'text-white/70' : 'text-gray-500'}`}>
+  // Pan/drag handling
+  const handleMouseDown = (e) => {
+    if (scale <= 1) return
+    e.preventDefault()
+    setDragStart({ x: e.clientX - offset.x, y: e.clientY - offset.y })
+  }
+  const handleMouseMove = (e) => {
+    if (!dragStart) return
+    setOffset({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y })
+  }
+  const handleMouseUp = () => setDragStart(null)
+
+  const reset = () => { setScale(1); setRotate(0); setFlipH(false); setFlipV(false); setOffset({ x: 0, y: 0 }) }
+
+  const ToolBtn = ({ onClick, title, children, active }) => (
+    <button onClick={onClick} title={title}
+      className={`p-2 rounded-lg transition-all text-white/80 hover:text-white hover:bg-white/20 active:scale-90 ${active ? 'bg-white/20 text-white' : ''}`}>
+      {children}
+    </button>
+  )
+
+  const previewTree = (
+    <div className="flex flex-col items-center gap-3 h-full w-full"
+         onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
+      {/* HIGH CONTRAST FLOATING TOOLBAR — always dark for visibility */}
+      <div className="flex items-center gap-1 rounded-2xl px-3 py-1.5 bg-black/70 backdrop-blur-xl shadow-2xl border border-white/10 z-20">
+        <ToolBtn onClick={() => setScale(s => Math.max(0.25, s - 0.25))} title="Zoom out (-)">
+          <ZoomOut size={16}/>
+        </ToolBtn>
+        <span className="text-xs w-12 text-center select-none text-white/70 font-mono tabular-nums">
           {Math.round(scale * 100)}%
         </span>
-        <button onClick={() => setScale(s => Math.min(4, s + 0.25))} className={toolBtn} title="Zoom in"><ZoomIn size={15}/></button>
-        <div className={`w-px h-4 mx-1 ${dark ? 'bg-white/20' : 'bg-black/15'}`} />
-        <button onClick={() => setRotate(r => (r + 90) % 360)} className={toolBtn} title="Rotate"><RotateCw size={15}/></button>
-        <button onClick={() => { setScale(1); setRotate(0) }}
-          className={`text-xs px-2 py-1 rounded-lg transition-colors
-            ${dark ? 'text-white/50 hover:text-white hover:bg-white/20' : 'text-gray-400 hover:text-gray-700 hover:bg-black/10'}`}>
+        <ToolBtn onClick={() => setScale(s => Math.min(5, s + 0.25))} title="Zoom in (+)">
+          <ZoomIn size={16}/>
+        </ToolBtn>
+        <div className="w-px h-5 mx-1 bg-white/15"/>
+        <ToolBtn onClick={() => setRotate(r => (r + 90) % 360)} title="Rotate (R)">
+          <RotateCw size={16}/>
+        </ToolBtn>
+        <ToolBtn onClick={() => setFlipH(!flipH)} title="Flip horizontal" active={flipH}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v18M16 7l4 5-4 5M8 7l-4 5 4 5"/></svg>
+        </ToolBtn>
+        <ToolBtn onClick={() => setFlipV(!flipV)} title="Flip vertical" active={flipV}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M7 8L12 4l5 4M7 16l5 4 5-4"/></svg>
+        </ToolBtn>
+        <div className="w-px h-5 mx-1 bg-white/15"/>
+        <ToolBtn onClick={() => {
+          const el = document.querySelector('[data-image-container] img')
+          if (el) el.requestFullscreen?.()
+        }} title="Fullscreen">
+          <Maximize2 size={16}/>
+        </ToolBtn>
+        <button onClick={reset}
+          className="text-[11px] px-2.5 py-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/20 transition-all font-medium">
           Reset
         </button>
       </div>
 
-      <div className="flex-1 flex items-center justify-center w-full overflow-hidden relative">
+      {/* Image display area */}
+      <div data-image-container className="flex-1 flex items-center justify-center w-full overflow-hidden relative"
+           style={{ cursor: scale > 1 ? (dragStart ? 'grabbing' : 'grab') : 'zoom-in' }}>
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center z-10">
-            <div className={`w-8 h-8 border-2 rounded-full animate-spin ${dark ? 'border-white/30 border-t-white' : 'border-gray-300 border-t-gray-600'}`}/>
+            <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
           </div>
         )}
         <motion.img
           src={src} alt={fileName}
           onLoad={() => setLoading(false)}
-          animate={{ scale, rotate }}
+          onMouseDown={handleMouseDown}
+          animate={{ scale, rotate, x: offset.x, y: offset.y, scaleX: flipH ? -scale : scale, scaleY: flipV ? -scale : scale }}
           transition={{ type: 'spring', stiffness: 200, damping: 25 }}
-          className={`max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-opacity duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`}
-          style={{ cursor: scale > 1 ? 'zoom-out' : 'zoom-in' }}
-          onClick={e => { e.stopPropagation(); setScale(s => s === 1 ? 2 : 1) }}
+          className={`max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-opacity duration-300 select-none ${loading ? 'opacity-0' : 'opacity-100'}`}
+          onClick={e => { e.stopPropagation(); if (!dragStart) setScale(s => s === 1 ? 2 : 1) }}
           draggable={false}
         />
+      </div>
+
+      {/* Keyboard hint */}
+      <div className="flex items-center gap-3 text-[10px] text-white/25 font-mono pb-1">
+        <span>+/- Zoom</span>
+        <span>R Rotate</span>
+        <span>0 Reset</span>
+        <span>Click to 2×</span>
       </div>
     </div>
   )
 }
 
-// ── Video player ──────────────────────────────────────────────────────
-function VideoPlayer({ src, dark }) {
-  const [loading, setLoading] = useState(true)
-  useEffect(() => { setLoading(true); }, [src])
-
-  return (
-    <div className="w-full h-full flex items-center justify-center relative">
-      {loading && (
-        <div className="absolute inset-0 flex items-center justify-center z-10 transition-opacity">
-          <div className={`w-8 h-8 border-2 rounded-full animate-spin ${dark ? 'border-white/30 border-t-white' : 'border-gray-300 border-t-gray-600'}`}/>
-        </div>
-      )}
-      <video key={src} src={src} controls autoPlay
-        onLoadedData={() => setLoading(false)}
-        className={`max-w-full max-h-full rounded-xl shadow-2xl transition-opacity duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`} style={{ maxHeight: '72vh' }}>
-        Your browser does not support video.
-      </video>
-    </div>
-  )
-}
+// ── Video player (Delegated to external component) ─────────────
 
 // ── Audio player ──────────────────────────────────────────────────────
 function AudioPlayer({ src, file, dark }) {
@@ -131,8 +192,8 @@ function PdfViewer({ src, dark }) {
         </div>
       )}
       <iframe key={src} src={src} onLoad={() => setLoading(false)} 
-        className={`w-full rounded-xl shadow-2xl border-0 transition-opacity duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`}
-        style={{ height: '75vh' }} title="PDF Preview"/>
+        className={`w-full h-full rounded-xl shadow-2xl border-0 transition-opacity duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`}
+        title="PDF Preview"/>
     </div>
   )
 }
@@ -157,7 +218,7 @@ function TextViewer({ src, dark }) {
     ${dark ? 'text-white/40' : 'text-gray-400'}`}>Could not load text file.</div>
 
   return (
-    <div className={`w-full max-h-[72vh] overflow-auto rounded-xl border
+    <div className={`w-full h-full overflow-auto rounded-xl border
       ${dark ? 'bg-black/40 border-white/10' : 'bg-gray-50 border-gray-200'}`}>
       <pre className={`p-5 text-sm font-mono whitespace-pre-wrap break-words leading-relaxed
         ${dark ? 'text-gray-200' : 'text-gray-800'}`}>
@@ -223,7 +284,7 @@ function ThumbnailStrip({ files, currentIdx, onSelect, dark }) {
         ${dark ? '' : ''}`}
       style={{ scrollbarWidth: 'none' }}>
       {files.map((f, i) => {
-        const cat     = getMimeCategory(f.mimeType)
+        const cat     = getMimeCategory(f.mimeType, f.fileName)
         const isImage = cat === 'image'
         const isCur   = i === currentIdx
         const getPreviewUrl = (file) => {
@@ -248,7 +309,7 @@ function ThumbnailStrip({ files, currentIdx, onSelect, dark }) {
                   ? 'opacity-50 hover:opacity-80 ring-1 ring-white/10'
                   : 'opacity-50 hover:opacity-80 ring-1 ring-black/10'}
               ${dark ? 'ring-offset-black' : 'ring-offset-white'}`}
-            style={isCur ? { ringColor: PALETTE[getMimeCategory(f.mimeType)]?.accent } : {}}
+            style={isCur ? { ringColor: PALETTE[getMimeCategory(f.mimeType, f.fileName)]?.accent } : {}}
           >
             {isImage
               ? <img src={src} alt={f.fileName} className="w-full h-full object-cover"/>
@@ -272,10 +333,50 @@ function ThumbnailStrip({ files, currentIdx, onSelect, dark }) {
 export default function PreviewModal({ open, file, files = [], onClose }) {
   const { dark } = useTheme()
   const token    = localStorage.getItem('token')
+  const canShowAds = useAdGuard()
+  const [gateOpen, setGateOpen] = useState(false)
+  const [audioMiniMode, setAudioMiniMode] = useState(false)
+  const [bgAudioFile, setBgAudioFile] = useState(null)
+  const [forceAudioOpen, setForceAudioOpen] = useState(false)
 
   // Find starting index from the files array
   const startIdx = file && files.length ? files.findIndex(f => f._id === file._id) : 0
   const [idx, setIdx] = useState(Math.max(0, startIdx))
+
+  const current = files.length ? files[idx] : file
+
+  // Whenever we open a new audio file, it becomes the background audio
+  useEffect(() => {
+    if (open && current && getMimeCategory(current.mimeType, current.fileName) === 'audio') {
+      setBgAudioFile(current)
+      setAudioMiniMode(false)
+      setForceAudioOpen(false)
+    }
+  }, [open, current])
+
+  // Auto-hide controls
+  const [controlsVisible, setControlsVisible] = useState(true)
+  const idleTimerRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handleActivity = () => {
+      setControlsVisible(true)
+      clearTimeout(idleTimerRef.current)
+      idleTimerRef.current = setTimeout(() => setControlsVisible(false), 2500)
+    }
+    handleActivity()
+    window.addEventListener('mousemove', handleActivity)
+    window.addEventListener('keydown', handleActivity)
+    window.addEventListener('touchstart', handleActivity)
+    return () => {
+      window.removeEventListener('mousemove', handleActivity)
+      window.removeEventListener('keydown', handleActivity)
+      window.removeEventListener('touchstart', handleActivity)
+      clearTimeout(idleTimerRef.current)
+    }
+  }, [open])
+
 
   // Sync index whenever the triggering file prop changes
   useEffect(() => {
@@ -295,10 +396,16 @@ export default function PreviewModal({ open, file, files = [], onClose }) {
     return `${filesAPI.preview(f._id)}?token=${token}`;
   }
 
-  const current = files.length ? files[idx] : file
-  const cat     = current ? getMimeCategory(current.mimeType) : ''
+  // Active viewing logic
+  const activeFile = (open && current) ? current : (bgAudioFile || current)
+  const cat     = activeFile ? getMimeCategory(activeFile.mimeType, activeFile.fileName) : ''
   const palette = PALETTE[cat] || PALETTE.other
-  const src     = getPreviewUrl(current)
+  const src     = getPreviewUrl(activeFile)
+
+  // Modal is visible if the user explicitly opened a file (open = true) or expanded audio (forceAudioOpen = true),
+  // AND they haven't minimized the CURRENTLY actively viewed file (if it's the background audio)
+  const isViewingBgAudio = bgAudioFile && activeFile?._id === bgAudioFile._id
+  const isModalVisible = (open || forceAudioOpen) && !(audioMiniMode && isViewingBgAudio)
 
   const hasPrev = idx > 0
   const hasNext = idx < files.length - 1
@@ -310,18 +417,32 @@ export default function PreviewModal({ open, file, files = [], onClose }) {
   useEffect(() => {
     if (!open) return
     const handler = (e) => {
-      if (e.key === 'Escape')      onClose()
-      if (e.key === 'ArrowRight')  goNext()
-      if (e.key === 'ArrowLeft')   goPrev()
+      if (e.key === 'Escape') onClose()
+      
+      const isVideo = current && getMimeCategory(current.mimeType, current.fileName) === 'video'
+      // If we are watching a video, let the VideoPlayer explicitly consume Left/Right/Up/Down
+      if (!isVideo) {
+        if (e.key === 'ArrowRight')  goNext()
+        if (e.key === 'ArrowLeft')   goPrev()
+      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [open, idx, hasPrev, hasNext])
+  }, [open, idx, hasPrev, hasNext, current])
 
   const handleDownload = async () => {
     if (!current) return
     
-    // Public download (no JWT, redirect to public API)
+    if (canShowAds) {
+      setGateOpen(true)
+      return
+    }
+    await doDownload()
+  }
+
+  const doDownload = async () => {
+    if (!current) return
+
     if (current._publicToken) {
       let url = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/public/download/${current._publicToken}`;
       const params = new URLSearchParams();
@@ -333,26 +454,21 @@ export default function PreviewModal({ open, file, files = [], onClose }) {
     }
 
     // Authenticated download
-    const tid = toast.loading('Preparing download...')
-    try {
-      const { data } = await filesAPI.download(current._id)
-      const url = URL.createObjectURL(new Blob([data]))
-      const a = document.createElement('a')
-      a.href = url; a.download = current.fileName; a.click()
-      URL.revokeObjectURL(url)
-      toast.success('Download started', { id: tid })
-    } catch { toast.error('Download failed', { id: tid }) }
+    toast.success('Download starting...')
+    window.location.href = filesAPI.downloadUrl(current._id)
   }
 
   const renderContent = () => {
-    if (!current) return null
+    if (!activeFile) return null
+    if (cat === 'audio') return null // Handled permanently below so it doesn't unmount
     switch (cat) {
-      case 'image':   return <ImageViewer src={src} fileName={current.fileName} dark={dark}/>
-      case 'video':   return <VideoPlayer src={src} dark={dark}/>
-      case 'audio':   return <AudioPlayer src={src} file={current} dark={dark}/>
-      case 'pdf':     return <PdfViewer src={src} dark={dark}/>
-      case 'text':    return <TextViewer src={src} dark={dark}/>
-      default:        return <GenericPreview file={current} cat={cat} dark={dark} onDownload={handleDownload}/>
+      case 'image':   return <ImageViewer src={src} fileName={activeFile.fileName} dark={dark}/>
+      case 'video':   return <VideoPlayer src={src} file={activeFile} dark={dark} onNext={goNext} />
+      case 'pdf':     return <Suspense fallback={<LazySpinner dark={dark}/>}><PdfViewerPro src={src} dark={dark}/></Suspense>
+      case 'code':    return <Suspense fallback={<LazySpinner dark={dark}/>}><CodeViewer src={src} fileName={activeFile.fileName} dark={dark}/></Suspense>
+      case 'sheet':   return <Suspense fallback={<LazySpinner dark={dark}/>}><SpreadsheetViewer src={src} fileName={activeFile.fileName} dark={dark}/></Suspense>
+      case 'doc':     return <Suspense fallback={<LazySpinner dark={dark}/>}><DocViewer src={src} fileName={activeFile.fileName} dark={dark}/></Suspense>
+      default:        return <GenericPreview file={activeFile} cat={cat} dark={dark} onDownload={handleDownload}/>
     }
   }
 
@@ -371,14 +487,23 @@ export default function PreviewModal({ open, file, files = [], onClose }) {
 
   return (
     <AnimatePresence>
-      {open && current && (
+      {(open || bgAudioFile) && (activeFile || bgAudioFile) && (
         <motion.div
           key="preview-overlay"
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          transition={{ duration: 0.18 }}
-          className="fixed inset-0 z-[100] flex flex-col"
-          style={{ background: overlay, backdropFilter: 'blur(16px)' }}
-          onClick={onClose}   // click backdrop → close
+          initial={{ opacity: 0 }} 
+          animate={{ opacity: isModalVisible ? 1 : 0 }} 
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className={`fixed inset-0 flex flex-col ${isModalVisible ? '' : 'pointer-events-none'}`}
+          style={{ 
+            zIndex: UI_LAYERS.preview,
+            background: isModalVisible ? overlay : 'transparent', 
+            backdropFilter: isModalVisible ? 'blur(16px)' : 'none'
+          }}
+          onClick={() => {
+            if (forceAudioOpen) setForceAudioOpen(false)
+            if (open) onClose()
+          }}   // click backdrop → close
         >
           {/* Ambient blob */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -388,24 +513,31 @@ export default function PreviewModal({ open, file, files = [], onClose }) {
 
           {/* ── Top bar ───────────────────────────────────────────── */}
           <motion.div
-            initial={{ y: -16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.05 }}
-            className="relative z-10 flex items-center gap-3 px-4 py-2.5 shrink-0"
+            initial={{ y: -16, opacity: 0 }}
+            animate={{ y: controlsVisible ? 0 : -32, opacity: controlsVisible ? 1 : 0 }}
+            transition={{ duration: 0.2 }}
+            className={`absolute left-0 right-0 top-0 z-50 flex items-center gap-3 px-3.5 py-2 transition-opacity ${!controlsVisible ? 'pointer-events-none' : ''}`}
             style={{ background: barBg, backdropFilter: 'blur(24px)', borderBottom: `1px solid ${barBdr}` }}
             onClick={e => e.stopPropagation()}
+            onMouseEnter={() => { setControlsVisible(true); clearTimeout(idleTimerRef.current) }}
           >
             {/* file info */}
             <div className="flex items-center gap-2.5 flex-1 min-w-0">
-              <FileIcon mimeType={current.mimeType} size={15}/>
+              <FileIcon mimeType={activeFile?.mimeType} size={15}/>
               <div className="min-w-0">
-                <p className={`text-sm font-semibold truncate leading-tight ${titleClr}`}>{current.fileName}</p>
+                <p className={`text-[13px] font-semibold leading-tight truncate ${titleClr}`}>{activeFile?.fileName || 'Preview'}</p>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md"
-                    style={{ background: palette.accent + '22', color: palette.accent }}>
-                    {palette.label}
-                  </span>
-                  <span className={`text-xs ${subClr}`}>{formatBytes(current.fileSize)}</span>
-                  {files.length > 1 && (
-                    <span className={`text-xs ${subClr}`}>{idx + 1} / {files.length}</span>
+                  {activeFile && (
+                    <>
+                      <span className="rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                        style={{ background: palette.accent + '22', color: palette.accent }}>
+                        {palette.label}
+                      </span>
+                      <span className={`text-[11px] ${subClr}`}>{formatBytes(activeFile.fileSize)}</span>
+                    </>
+                  )}
+                  {open && files.length > 1 && (
+                    <span className={`text-[11px] ${subClr}`}>{idx + 1} / {files.length}</span>
                   )}
                 </div>
               </div>
@@ -414,72 +546,137 @@ export default function PreviewModal({ open, file, files = [], onClose }) {
             {/* actions */}
             <div className="flex items-center gap-1.5 shrink-0">
               <button onClick={handleDownload}
-                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border transition-all ${btnBase}`}>
-                <Download size={13}/> Download
+                className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-[11px] font-medium transition-all ${btnBase}`}>
+                <Download size={12}/> Download
               </button>
-              <button onClick={onClose}
-                className={`p-1.5 rounded-xl transition-all ${btnBase}`}>
-                <X size={17}/>
+              <button onClick={() => {
+                if (forceAudioOpen) setForceAudioOpen(false)
+                if (open) onClose()
+              }}
+                className={`rounded-xl p-1 transition-all ${btnBase}`}>
+                <X size={16}/>
               </button>
             </div>
           </motion.div>
 
           {/* ── Content area ──────────────────────────────────────── */}
-          <div className="relative z-10 flex-1 flex items-stretch overflow-hidden"
+          <div className="absolute inset-0 z-10 flex items-stretch overflow-hidden"
             onClick={e => e.stopPropagation()}>
 
             {/* Prev arrow */}
             <AnimatePresence>
-              {hasPrev && (
+              {open && hasPrev && (
                 <motion.button
                   initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
                   onClick={goPrev}
-                  className={`absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full flex items-center justify-center transition-all ${navBtn}`}
+                  className={`absolute left-3 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full transition-all ${navBtn}`}
                   title="Previous (←)">
-                  <ChevronLeft size={20}/>
+                  <ChevronLeft size={18}/>
                 </motion.button>
               )}
             </AnimatePresence>
 
             {/* Next arrow */}
             <AnimatePresence>
-              {hasNext && (
+              {open && hasNext && (
                 <motion.button
                   initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}
                   onClick={goNext}
-                  className={`absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full flex items-center justify-center transition-all ${navBtn}`}
+                  className={`absolute right-3 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full transition-all ${navBtn}`}
                   title="Next (→)">
-                  <ChevronRight size={20}/>
+                  <ChevronRight size={18}/>
                 </motion.button>
               )}
             </AnimatePresence>
 
-            {/* Content with slide animation */}
-            <div className="flex-1 overflow-auto flex flex-col p-4 sm:p-6">
-              <AnimatePresence mode="wait">
-                <motion.div key={current._id}
-                  initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }}
-                  transition={{ duration: 0.18 }}
-                  className="flex-1 flex flex-col h-full">
-                  {renderContent()}
-                </motion.div>
-              </AnimatePresence>
-            </div>
+              {/* Center content + Bottom Ad placement */}
+              <motion.div 
+                animate={{ 
+                  paddingTop: controlsVisible ? 64 : 20,
+                  paddingBottom: controlsVisible ? (files.length > 1 ? 88 : 32) : 20
+                }}
+                transition={{ duration: 0.2 }}
+                className="relative flex h-full w-full flex-1 flex-col items-center justify-center overflow-x-hidden overflow-y-auto px-3 sm:px-5">
+                
+                <AnimatePresence mode="wait">
+                  <motion.div key={current._id}
+                    initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex flex-col items-center justify-center w-full min-h-0 flex-1 relative z-20">
+                    
+                    {/* Main Content Area */}
+                    <div className="flex-1 overflow-hidden relative w-full h-full min-h-0 flex items-center justify-center" onContextMenu={e => e.preventDefault()}>
+                      {renderContent()}
+                    </div>
+
+                    {canShowAds && (
+                      <div className="relative mb-2 mt-5 w-full max-w-[42rem] shrink-0 rounded-[1.25rem] bg-gradient-to-r from-transparent via-white/5 dark:via-white/5 to-transparent p-2">
+                        <div className="absolute top-0 right-0 left-0 flex justify-center -mt-2">
+                          <span className="bg-black/40 backdrop-blur px-2 py-0.5 rounded text-[8px] uppercase tracking-widest text-white/50 border border-white/10">Advertisement</span>
+                        </div>
+                        <AdSlot formatId="2018497" style={{ width: '100%', margin: '0 auto', maxWidth: 728, minHeight: 86 }} />
+                      </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+
+                {/* Permanently Mounted Audio Player (Outside Keyed Animation) */}
+                {bgAudioFile && (
+                  <div className="absolute inset-0 z-30" style={{ pointerEvents: 'none', opacity: cat === 'audio' ? 1 : 0 }}>
+                    <div style={{ display: 'flex', width: '100%', height: '100%', alignItems: cat === 'audio' ? 'center' : 'flex-end', justifyContent: 'center', pointerEvents: (cat === 'audio' && isModalVisible) ? 'auto' : 'none' }}>
+                      <Suspense fallback={<LazySpinner dark={dark}/>}>
+                        <AudioPlayerPro 
+                          src={getPreviewUrl(bgAudioFile)} 
+                          file={bgAudioFile} 
+                          dark={dark} 
+                          onMinimize={() => setAudioMiniMode(true)} 
+                          onExpand={() => {
+                            setAudioMiniMode(false)
+                            if (!open) setForceAudioOpen(true)
+                          }}
+                          onClose={() => { 
+                            setAudioMiniMode(false)
+                            setForceAudioOpen(false)
+                            setBgAudioFile(null)
+                            if (activeFile && bgAudioFile._id === activeFile._id && open) {
+                              onClose()
+                            }
+                          }} 
+                        />
+                      </Suspense>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
           </div>
+
 
           {/* ── Thumbnail strip (bottom) ───────────────────────────── */}
           {files.length > 1 && (
             <motion.div
-              initial={{ y: 16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }}
-              className="relative z-10 shrink-0 pb-3"
+              initial={{ y: 16, opacity: 0 }}
+              animate={{ y: controlsVisible ? 0 : 32, opacity: controlsVisible ? 1 : 0 }}
+              transition={{ duration: 0.2 }}
+              className={`absolute bottom-0 left-0 right-0 z-50 pb-2 transition-opacity ${!controlsVisible ? 'pointer-events-none' : ''}`}
               style={{ background: barBg, backdropFilter: 'blur(24px)', borderTop: `1px solid ${barBdr}` }}
               onClick={e => e.stopPropagation()}
+              onMouseEnter={() => { setControlsVisible(true); clearTimeout(idleTimerRef.current) }}
             >
               <ThumbnailStrip files={files} currentIdx={idx} onSelect={setIdx} dark={dark}/>
             </motion.div>
           )}
         </motion.div>
       )}
+
+      {/* Download Ad Gate — renders outside the preview overlay */}
+      <DownloadAdGate
+        open={gateOpen}
+        onProceed={() => { setGateOpen(false); doDownload() }}
+        onClose={() => setGateOpen(false)}
+      />
     </AnimatePresence>
   )
+
+  if (typeof document === 'undefined') return null
+  return createPortal(previewTree, document.body)
 }

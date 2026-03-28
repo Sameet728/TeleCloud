@@ -1,59 +1,105 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useScroll } from 'framer-motion'
 import {
-  Cloud, Shield, Zap, FolderOpen, Share2, Search, ArrowRight, CheckCircle,
-  Download, Image as ImageIcon, Check, ChevronDown, Mail, Send
+  Cloud, Shield, Zap, FolderOpen, Share2, ArrowRight, 
+  Download, Image as ImageIcon, Check, ChevronDown, Mail, Send, Music, 
+  Disc3, Headphones, Moon, Sun, PlayCircle, HardDrive, 
+  ShieldCheck, AlertTriangle,
+  Shuffle, SkipBack, Pause, SkipForward, Repeat
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useTheme } from '../context/ThemeContext'
+import AdBanner from '../components/AdBanner'
+
+const StackXLogo = ({ size = 20, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+    <defs>
+      <linearGradient id="stackx-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#3b82f6" />
+        <stop offset="50%" stopColor="#6366f1" />
+        <stop offset="100%" stopColor="#a855f7" />
+      </linearGradient>
+    </defs>
+    <path d="M25 20 L50 60 L25 100 L45 100 L60 75 L75 100 L95 100 L70 60 L95 20 L75 20 L60 45 L45 20 Z" fill="url(#stackx-grad)" opacity="0.9" />
+    <path d="M15 40 L40 80 L15 120 L35 120 L50 95 L65 120 L85 120 L60 80 L85 40 L65 40 L50 65 L35 40 Z" fill="url(#stackx-grad)" opacity="0.5" />
+  </svg>
+)
+
+const TelecloudLogo = ({ iconSize = 16, textSize = "text-base" }) => (
+  <div className="flex items-center gap-2.5 group">
+    <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[10px] flex items-center justify-center shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+      <Cloud size={iconSize} className="text-white" />
+    </div>
+    <div className="flex flex-col justify-center mt-0.5">
+      <span className={`font-extrabold tracking-tight text-gray-900 dark:text-white ${textSize} leading-none mb-1`}>Telecloud</span>
+      <span className="text-[8px] font-bold tracking-[0.2em] text-zinc-500 uppercase flex items-center leading-none">
+        BY STACK<span className="text-indigo-500 mx-[1px]">X</span> LAB
+      </span>
+    </div>
+  </div>
+)
+
+const GridBackground = () => (
+  <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+    <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMSIgZmlsbD0iY3VycmVudENvbG9yIiBmaWxsLW9wYWNpdHk9IjAuMDUiLz48L3N2Zz4=')] opacity-[0.4] dark:opacity-[0.1]" />
+    <div className="absolute top-[-10%] left-[-5%] w-[50%] h-[50%] rounded-full bg-indigo-500/10 dark:bg-indigo-500/10 blur-[120px]" />
+    <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] rounded-full bg-purple-500/10 dark:bg-purple-500/10 blur-[120px]" />
+  </div>
+)
 
 const features = [
-  { icon: Shield, title: 'Secure File Storage', desc: 'Files stored securely in Telegram with robust encryption and privacy.' },
-  { icon: Share2, title: 'Advanced sharing', desc: 'Generate secure sharing links with expiry dates, passwords, and download limits.' },
-  { icon: Download, title: 'Drag & Drop Management', desc: 'Intuitively upload and manage files with native drag-and-drop gestures.' },
-  { icon: ImageIcon, title: 'Rich File Preview', desc: 'Instantly view images, play videos, and read PDFs directly in the browser.' },
-  { icon: FolderOpen, title: 'Smart Organization', desc: 'Nest folders intuitively and apply color-coding for maximum clarity.' },
-  { icon: Zap, title: 'Folder ZIP Download', desc: 'Download entire folders as a single ZIP file instantly with one click.' },
+  { icon: HardDrive, title: 'Infinite Vault', desc: 'Securely store files of any size leveraging Telegram\'s decentralized infrastructure. Zero limits.' },
+  { icon: Music, title: 'Hi-Fi Streaming', desc: 'Built-in 320kbps music player. Stream ad-free audio directly from your cloud library.' },
+  { icon: Share2, title: 'Secure Distribution', desc: 'Share assets with password protection, download limits, and auto-expiring links.' },
+  { icon: Download, title: 'Offline Access', desc: 'Download individual files, full directories, or entire music playlists instantly.' },
+  { icon: ImageIcon, title: 'Native Previews', desc: 'View high-res images, play videos, and read documents without leaving the browser.' },
+  { icon: FolderOpen, title: 'Smart Workspaces', desc: 'Organize your chaos with nested directories, color-coding, and seamless management.' },
+]
+
+const musicFeatures = [
+  { icon: Disc3, title: '320kbps Studio Quality', desc: 'Experience crystal-clear audio. No artificial compression, no compromises.' },
+  { icon: Headphones, title: 'Background Playback', desc: 'Keep listening while you browse files or switch tabs. The music never stops.' },
+  { icon: PlayCircle, title: 'Infinite Queue', desc: 'Algorithmically generated continuous playback based on your listening history.' },
+  { icon: Download, title: 'Offline Downloads', desc: 'Save your favorite tracks and playlists directly to your device for offline listening.' }
 ]
 
 const steps = [
-  { num: '01', title: 'Upload', desc: 'Securely upload your files. Your files are automatically streamed and stored into Telegram.' },
-  { num: '02', title: 'Organize', desc: 'Create folders, color-code directories, and manage your nested files neatly.' },
-  { num: '03', title: 'Share', desc: 'Generate public links with strict access controls to collaborate instantly.' },
+  { num: '1', title: 'Connect Node', desc: 'Link your Telegram account securely. We only use it as your personal storage vault.' },
+  { num: '2', title: 'Upload & Organize', desc: 'Drag and drop files, create directories, or import existing Telegram media instantly.' },
+  { num: '3', title: 'Stream & Share', desc: 'Listen to music in 320kbps or generate secure links to share your files globally.' },
 ]
 
 const plans = [
-  { name: 'Free Plan', price: '₹0', storage: '10GB Storage', duration: 'Forever', features: ['All standard features', 'Normal upload speeds'] },
-  { name: 'Monthly', price: '₹49', storage: 'Unlimited Storage', duration: '/ month', features: ['All Pro features', 'Max upload speeds', 'No limits'], recommended: true },
-  { name: '6 Months', price: '₹249', storage: 'Unlimited Storage', duration: '/ 6 months', features: ['All Pro features', 'Max upload speeds', 'Save 15%'] },
-  { name: 'Yearly', price: '₹499', storage: 'Unlimited Storage', duration: '/ year', features: ['All Pro features', 'Max upload speeds', 'Best Value'] },
+  { name: 'Starter', price: '₹0', storage: '10GB Volume', duration: 'Forever', features: ['10GB Storage Limit', '2 Hours/mo Music Streaming', 'Standard Upload Speeds', 'Ad-Supported'] },
+  { name: 'Pro Monthly', price: '₹49', storage: 'Unmetered Volume', duration: '/ month', features: ['Unlimited Storage', 'Unlimited Hi-Fi Streaming', 'Max Network Speeds', 'Zero Advertisements'], recommended: true },
+  { name: 'Pro Bi-Annual', price: '₹249', storage: 'Unmetered Volume', duration: '/ 6 months', features: ['Unlimited Storage', 'Unlimited Hi-Fi Streaming', 'Zero Advertisements', 'Save 15% Annually'] },
+  { name: 'Pro Annual', price: '₹499', storage: 'Unmetered Volume', duration: '/ year', features: ['Unlimited Storage', 'Unlimited Hi-Fi Streaming', 'VIP Node Routing', 'Maximum Value'] },
 ]
 
 const faqs = [
-  { q: "What happens when my subscription expires?", a: "Your data is सुरक्षित (safe) and not deleted. You will not be able to access, download, or share files until you renew." },
-  { q: "Will my files be deleted if I don't renew?", a: "No. All files remain completely secure and will be restored instantly after renewal." },
-  { q: "How is my data stored and is it permanently guaranteed?", a: "To provide blazing fast, unmetered storage, TeleCloud acts as a secure bridge to Telegram's infrastructure. Your files remain available as long as your Telegram account is active and in good standing. Note that TeleCloud is not a guaranteed permanent backup solution—data may be lost if Telegram inherently deletes your account due to extreme inactivity (e.g., 6+ months) or policy violations." },
-  { q: "Is storage really unlimited?", a: "Yes, for our paid plans. There are no artificial caps on how much you can upload." },
-  { q: "How secure is my data?", a: "Extremely secure. Your files are encrypted and securely stored using Telegram's battle-tested infrastructure." },
-  { q: "Can I share files securely?", a: "Absolutely! You can protect shared links with passwords, set expiry dates, and restrict total downloads." },
-  { q: "Can I download folders?", a: "Yes, you can easily download entire folders as zipped archives with a single click." }
+  { q: "Is the music streaming really 320kbps?", a: "Yes. For our Pro users, the integrated music player streams audio at the highest available fidelity (320kbps) without any artificial compression, rivaling dedicated platforms like Spotify or Apple Music." },
+  { q: "How is my data stored securely?", a: "Telecloud acts as a sophisticated bridge. Your files are encrypted and routed directly into your personal Telegram account's 'Saved Messages' or dedicated channels. We do not store your files on our servers." },
+  { q: "What happens when my Pro subscription expires?", a: "Your files are never deleted. You will be downgraded to the Starter tier. You won't be able to upload new files if you are over the 10GB limit, and your music streaming will be capped at 2 hours per month." },
+  { q: "Is storage truly unlimited?", a: "Yes. By utilizing Telegram's infrastructure, Pro users face no artificial caps on how much data they can store in their vault." },
+  { q: "Can I download my entire music playlist?", a: "Absolutely. You can download individual tracks, entire folders, or full playlists as a single ZIP archive for offline listening." }
 ]
 
-const container = { hidden: {}, show: { transition: { staggerChildren: 0.1 } } }
-const item = { hidden: { opacity: 0, y: 24 }, show: { opacity: 1, y: 0 } }
+const staggerContainer = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.08 } } }
+const fadeUp = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 30 } } }
 
 function FAQItem({ q, a }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden mb-3 hover:border-brand-200 dark:hover:border-brand-800 transition-colors">
-      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between p-5 text-left bg-white dark:bg-gray-900">
-        <span className="font-semibold text-gray-900 dark:text-white">{q}</span>
-        <ChevronDown size={18} className={`text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+    <div className="border border-gray-200/60 dark:border-zinc-800/60 rounded-xl overflow-hidden mb-3 hover:border-indigo-500/50 dark:hover:border-indigo-500/50 transition-colors bg-white/40 dark:bg-zinc-900/40 backdrop-blur-md shadow-sm">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between p-5 text-left focus:outline-none">
+        <span className="font-bold text-gray-900 dark:text-white text-sm tracking-tight">{q}</span>
+        <ChevronDown size={16} className={`text-indigo-500 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
       </button>
       <AnimatePresence>
         {open && (
-          <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden bg-gray-50 dark:bg-gray-800/50">
-            <p className="p-5 text-gray-500 dark:text-gray-400 text-sm leading-relaxed">{a}</p>
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+            <p className="px-5 pb-5 text-zinc-600 dark:text-zinc-400 text-xs leading-relaxed font-medium">{a}</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -63,192 +109,342 @@ function FAQItem({ q, a }) {
 
 export default function Landing() {
   const { user } = useAuth()
+  const { dark, toggle: toggleTheme } = useTheme()
+  const { scrollY } = useScroll()
+  const [isScrolled, setIsScrolled] = useState(false)
+
+  // ✅ THE FIX: Apply dark class to <html> so ALL Tailwind dark: variants work correctly,
+  // including fixed/absolute elements that escape a wrapper div's stacking context.
+  useEffect(() => {
+    if (dark) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }, [dark])
+
+  useEffect(() => {
+    return scrollY.onChange((latest) => {
+      setIsScrolled(latest > 20)
+    })
+  }, [scrollY])
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950 scroll-smooth">
-      {/* ── Nav ──────────────────────────────────────────────────────── */}
-      <header className="fixed top-0 inset-x-0 z-50 bg-white/80 dark:bg-gray-950/80 backdrop-blur-xl border-b border-gray-100 dark:border-gray-900">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-brand-600 rounded-xl flex items-center justify-center">
-              <Cloud size={16} className="text-white" />
-            </div>
-            <span className="font-semibold text-gray-900 dark:text-white">TeleCloud</span>
-          </div>
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-500 dark:text-gray-400">
+    // ✅ Removed the outer wrapper <div className={dark ? 'dark' : ''}> — no longer needed
+    <div className="min-h-screen bg-[#fafafa] dark:bg-[#0a0a0c] text-zinc-900 dark:text-zinc-100 font-sans selection:bg-indigo-500/30 overflow-x-hidden relative transition-colors duration-300">
+      <GridBackground />
+
+      {/* ── Modern Floating Pill Navbar ────────────────────────────────── */}
+      <motion.header 
+        className={`fixed inset-x-0 top-0 z-50 mx-auto w-full max-w-[920px] px-3.5 transition-all duration-300 sm:top-3 sm:px-5`}
+      >
+        <div className={`flex h-12 items-center justify-between rounded-[1.2rem] px-3.5 transition-all duration-300 sm:rounded-full sm:px-5 
+          ${isScrolled 
+            ? 'bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border border-gray-200/50 dark:border-white/10 shadow-lg shadow-black/5' 
+            : 'bg-transparent border border-transparent'
+          }`}
+        >
+          <Link to="/" className="flex items-center gap-3">
+            <TelecloudLogo iconSize={16} textSize="text-base" />
+          </Link>
+          
+          <nav className="hidden items-center gap-5 text-[11px] font-bold text-zinc-500 dark:text-zinc-400 md:flex">
             <a href="#features" className="hover:text-gray-900 dark:hover:text-white transition-colors">Features</a>
-            <a href="#how-it-works" className="hover:text-gray-900 dark:hover:text-white transition-colors">How it works</a>
+            <a href="#music" className="hover:text-gray-900 dark:hover:text-white transition-colors flex items-center gap-1.5">
+              <Music size={12} className="text-indigo-500"/> Studio Player
+            </a>
             <a href="#pricing" className="hover:text-gray-900 dark:hover:text-white transition-colors">Pricing</a>
             <a href="#faq" className="hover:text-gray-900 dark:hover:text-white transition-colors">FAQ</a>
           </nav>
+          
           <div className="flex items-center gap-3">
+            <button 
+              onClick={toggleTheme} 
+              className="p-2 rounded-full hover:bg-gray-200/50 dark:hover:bg-zinc-800/50 transition-colors text-zinc-500 dark:text-zinc-400 flex items-center justify-center"
+              aria-label="Toggle dark mode"
+            >
+              {dark ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+
+            <div className="w-px h-4 bg-gray-300 dark:bg-zinc-700 hidden sm:block mx-1" />
+
             {user ? (
-              <Link to="/dashboard" className="btn-primary text-sm flex items-center gap-1.5">
-                Dashboard <ArrowRight size={14} />
+              <Link to="/dashboard" className="hidden sm:flex items-center gap-1.5 px-4 py-1.5 bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900 text-xs font-bold rounded-full transition-all active:scale-95 shadow-sm">
+                Workspace <ArrowRight size={12} />
               </Link>
             ) : (
               <>
-                <Link to="/login" className="btn-secondary text-sm hidden sm:block">Sign in</Link>
-                <Link to="/register" className="btn-primary text-sm">Get started</Link>
+                <Link to="/login" className="hidden sm:block text-xs font-bold text-zinc-600 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white transition-colors">Log in</Link>
+                <Link to="/register" className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-full transition-all active:scale-95 shadow-sm">
+                  Deploy Free
+                </Link>
               </>
             )}
           </div>
         </div>
-      </header>
+      </motion.header>
 
-      {/* ── Hero ─────────────────────────────────────────────────────── */}
-      <section className="pt-32 pb-20 px-4">
-        <div className="max-w-4xl mx-auto text-center">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-            <span className="inline-flex items-center gap-2 bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 text-sm font-medium px-4 py-1.5 rounded-full mb-6 border border-brand-100 dark:border-brand-800">
-              <Zap size={14} /> SaaS Excellence
-            </span>
-            <h1 className="text-5xl md:text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight tracking-tight">
-              Smart Cloud Storage <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-500 to-purple-500">
-                Powered by Telegram.
+      {/* ── Hero Section ────────────────────────────────────────────── */}
+      <section className="relative flex min-h-[72vh] flex-col items-center justify-center px-5 pb-12 pt-[7rem]">
+        <div className="relative z-10 mx-auto max-w-[840px] text-center">
+          <motion.div initial="hidden" animate="show" variants={staggerContainer} className="flex flex-col items-center space-y-5">
+            
+            <motion.div variants={fadeUp}>
+              <a href="#footer-stackx" className="group inline-flex cursor-pointer items-center gap-2 rounded-full border border-gray-200 bg-white/50 px-3.5 py-1 shadow-sm transition-colors hover:bg-gray-50 dark:border-zinc-800 dark:bg-zinc-900/50 dark:hover:bg-zinc-800">
+                <StackXLogo size={14} />
+                <span className="text-[10px] font-bold tracking-wide text-gray-600 dark:text-zinc-300">
+                  A flagship product by <span className="text-indigo-600 dark:text-indigo-400 group-hover:underline">StackX Lab</span> →
+                </span>
+              </a>
+            </motion.div>
+            
+            <motion.h1 variants={fadeUp} className="text-3xl font-black leading-[1.03] tracking-tighter text-gray-900 dark:text-white md:text-[3.25rem] lg:text-[3.95rem]">
+              Institutional Storage, <br className="hidden md:block" />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-indigo-500">
+                Studio-Grade Streaming.
               </span>
-            </h1>
-            <p className="text-xl text-gray-500 dark:text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed">
-              Store, share, and manage your files securely with unlimited potential. Experience fluid drag-and-drop, rich previews, and enterprise-grade infrastructure.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              {user ? (
-                <Link to="/dashboard">
-                  <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                    className="btn-primary text-base px-8 py-3.5 shadow-lg shadow-brand-500/25">
-                    Enter Dashboard <ArrowRight size={18} className="ml-1" />
-                  </motion.button>
-                </Link>
-              ) : (
-                <>
-                  <Link to="/register">
-                    <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                      className="btn-primary text-base px-8 py-3.5 shadow-lg shadow-brand-500/25">
-                      Get Started <ArrowRight size={18} className="ml-1" />
-                    </motion.button>
-                  </Link>
-                  <a href="#pricing">
-                    <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                      className="btn-secondary text-base px-8 py-3.5">
-                      View Pricing
-                    </motion.button>
-                  </a>
-                </>
-              )}
-            </div>
+            </motion.h1>
+            
+            <motion.p variants={fadeUp} className="mx-auto max-w-xl text-[13px] font-medium leading-relaxed text-zinc-500 dark:text-zinc-400 md:text-sm">
+              Deploy unlimited cloud storage utilizing Telegram's infrastructure. Access high-fidelity 320kbps music instantly without artificial caps or compression.
+            </motion.p>
+            
+            <motion.div variants={fadeUp} className="flex w-full flex-col items-center justify-center gap-2.5 pt-3 sm:w-auto sm:flex-row">
+              <Link to={user ? "/dashboard" : "/register"} className="w-full sm:w-auto">
+                <button className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-[0_4px_14px_0_rgba(16,185,129,0.39)] transition-all active:scale-95 hover:bg-emerald-400 sm:w-auto">
+                  {user ? 'Open Workspace' : 'Start Building'} <ArrowRight size={14} />
+                </button>
+              </Link>
+              <a href="#music" className="w-full sm:w-auto">
+                <button className="flex w-full items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-5 py-2.5 text-[13px] font-bold text-gray-900 shadow-sm transition-all active:scale-95 hover:bg-gray-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white dark:hover:bg-zinc-800 sm:w-auto">
+                  <Music size={14} /> Explore Audio Player
+                </button>
+              </a>
+            </motion.div>
           </motion.div>
         </div>
       </section>
 
-      {/* ── Features ─────────────────────────────────────────────────── */}
-      <section id="features" className="py-24 px-4 bg-gray-50/50 dark:bg-gray-900/20 border-y border-gray-100 dark:border-gray-800">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Powerful Features</h2>
-            <p className="text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">Designed for professionals. Built on a rock-solid foundation with everything you need out of the box.</p>
+      {/* ── Core Features Grid ────────────────────────────────────────── */}
+      <section id="features" className="relative z-10 border-y border-gray-200/50 bg-white/40 px-5 py-[4.5rem] backdrop-blur-2xl dark:border-white/5 dark:bg-[#0a0a0c]/40">
+        <div className="mx-auto max-w-[1040px]">
+          <div className="mb-12 text-center">
+            <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-500 mb-2">Unified Infrastructure</h2>
+            <h3 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white tracking-tight">The ultimate media vault.</h3>
           </div>
-          <motion.div variants={container} initial="hidden" whileInView="show" viewport={{ once: true }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map(({ icon: Icon, title, desc }) => (
-              <motion.div key={title} variants={item} className="card p-8 bg-white dark:bg-gray-900 hover:shadow-xl transition-shadow border border-gray-100 dark:border-gray-800">
-                <div className="w-12 h-12 bg-brand-50 dark:bg-brand-900/30 rounded-2xl flex items-center justify-center mb-6">
-                  <Icon size={24} className="text-brand-600 dark:text-brand-400" />
+          
+          <motion.div variants={staggerContainer} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-50px" }} className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {features.map((feature, i) => (
+              <motion.div key={i} variants={fadeUp} className="group rounded-[1.25rem] border border-gray-200/60 bg-white/80 p-5 shadow-sm transition-colors hover:border-indigo-500/40 dark:border-white/5 dark:bg-zinc-900/60 dark:hover:border-indigo-500/40">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-[0.95rem] border border-indigo-100 bg-indigo-50 transition-transform group-hover:scale-105 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+                  <feature.icon size={20} className="text-indigo-600 dark:text-indigo-400" />
                 </div>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">{title}</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{desc}</p>
+                <h4 className="mb-2 text-[15px] font-bold tracking-tight text-gray-900 dark:text-white">{feature.title}</h4>
+                <p className="text-[11px] font-medium leading-relaxed text-zinc-500 dark:text-zinc-400">{feature.desc}</p>
               </motion.div>
             ))}
           </motion.div>
         </div>
       </section>
 
-      {/* ── How it works ─────────────────────────────────────────────── */}
-      <section id="how-it-works" className="py-24 px-4 layout-container">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">How It Works</h2>
-          <p className="text-gray-500 dark:text-gray-400">Adopt a workflow that feels native.</p>
+      {/* Ad Break */}
+      <div className="mx-auto max-w-4xl px-5 py-8">
+        <div className="overflow-hidden rounded-[1.4rem] border border-gray-200/50 bg-white/50 p-1.5 shadow-sm backdrop-blur-md dark:border-white/5 dark:bg-zinc-900/50">
+          <AdBanner formatId="2018497" />
         </div>
-        <div className="grid md:grid-cols-3 gap-8 relative max-w-5xl mx-auto">
-          {/* Connector line (desktop only) */}
-          <div className="hidden md:block absolute top-12 left-[16%] right-[16%] h-0.5 bg-gradient-to-r from-gray-100 via-brand-200 to-gray-100 dark:from-gray-800 dark:via-brand-800 dark:to-gray-800" />
+      </div>
 
-          {steps.map((s, i) => (
-            <motion.div key={s.title} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.2 }} viewport={{ once: true }} className="relative text-center">
-              <div className="w-24 h-24 mx-auto bg-white dark:bg-gray-950 rounded-full border-8 border-gray-50 dark:border-gray-900 flex items-center justify-center mb-6 relative z-10 shadow-sm">
-                <span className="text-2xl font-bold text-brand-600 dark:text-brand-400">{s.num}</span>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">{s.title}</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{s.desc}</p>
-            </motion.div>
-          ))}
-        </div>
-      </section>
+      {/* ── Studio Player Spotlight ─────────────────────────────── */}
+      <section id="music" className="relative z-10 overflow-hidden px-5 py-[4.5rem]">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-500/5 dark:via-emerald-500/5 to-transparent pointer-events-none" />
+        
+        <div className="mx-auto grid max-w-[1040px] items-center gap-8 md:grid-cols-2 md:gap-10">
+          
+          <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="space-y-6">
+            <div>
+              <span className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-200/50 bg-emerald-50 px-2.5 py-0.75 text-[9px] font-bold uppercase tracking-widest text-emerald-600 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400">
+                <Disc3 size={12} className="animate-spin-slow"/> Spotify Alternative
+              </span>
+              <h2 className="text-[2rem] font-black leading-[1.08] tracking-tight text-gray-900 dark:text-white md:text-[2.5rem]">
+                Your personal, <br className="hidden md:block"/> ad-free audio studio.
+              </h2>
+              <p className="mt-3 max-w-md text-[13px] font-medium leading-relaxed text-zinc-500 dark:text-zinc-400">
+                Ditch the monthly music subscriptions. Telecloud Pro includes a native, high-fidelity music player with infinite streaming, curated playlists, and offline downloads.
+              </p>
+            </div>
 
-      {/* ── Subscription Logic Banner ────────────────────────────────── */}
-      <section className="py-12 px-4 bg-amber-50 dark:bg-amber-900/10 border-y border-amber-100 dark:border-amber-900/30">
-        <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
-          <div className="w-16 h-16 shrink-0 bg-amber-100 dark:bg-amber-900/40 rounded-full flex items-center justify-center">
-            <Shield size={28} className="text-amber-600 dark:text-amber-500" />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-amber-800 dark:text-amber-400 mb-2">Important Note on Subscriptions</h3>
-            <p className="text-sm text-amber-700/80 dark:text-amber-200/70">
-              We never delete your data. If your subscription expires, your files remain <strong>सुरक्षित (securely stored)</strong>. Access and sharing will be temporarily disabled until you renew your subscription.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Pricing ──────────────────────────────────────────────────── */}
-      <section id="pricing" className="py-24 px-4 bg-gray-50 dark:bg-gray-900/30">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Simple, Transparent Pricing</h2>
-            <p className="text-gray-500 dark:text-gray-400">Unlock infinite possibilities with unmetered storage.</p>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-center">
-            {plans.map((p) => (
-              <motion.div key={p.name} whileHover={{ y: -8 }} className={`p-8 rounded-3xl bg-white dark:bg-gray-900 border ${p.recommended ? 'border-brand-500 ring-4 ring-brand-500/10 shadow-xl' : 'border-gray-200 dark:border-gray-800'}`}>
-                {p.recommended && <span className="inline-block px-3 py-1 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400 text-xs font-bold uppercase tracking-wider rounded-full mb-4">Recommended</span>}
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{p.name}</h3>
-                <div className="flex items-baseline gap-1 mb-6">
-                  <span className="text-4xl font-extrabold text-gray-900 dark:text-white">{p.price}</span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">{p.duration}</span>
-                </div>
-                <div className="space-y-4 mb-8">
-                  <div className="flex items-center gap-3">
-                    <Cloud size={18} className={p.recommended ? "text-brand-500" : "text-gray-400"} />
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{p.storage}</span>
+            <div className="space-y-4">
+              {musicFeatures.map((feat, i) => (
+                <div key={i} className="flex items-start gap-3.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.9rem] border border-gray-200/80 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-800">
+                    <feat.icon size={16} className="text-emerald-500" />
                   </div>
-                  {p.features.map(f => (
-                    <div key={f} className="flex items-center gap-3">
-                      <Check size={18} className="text-green-500" />
-                      <span className="text-sm text-gray-600 dark:text-gray-300">{f}</span>
-                    </div>
-                  ))}
+                  <div>
+                    <h4 className="text-[13px] font-bold text-gray-900 dark:text-white">{feat.title}</h4>
+                    <p className="mt-1 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">{feat.desc}</p>
+                  </div>
                 </div>
-                <Link to={user ? "/pricing" : "/login"}>
-                  <button className={`w-full py-3 rounded-xl font-semibold transition-colors ${p.recommended ? 'bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-500/25' : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-900 dark:text-white'}`}>
-                    Choose Plan
+              ))}
+            </div>
+          </motion.div>
+
+          {/* Interactive Player Mockup */}
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} className="w-full relative">
+            <div className="absolute inset-0 rounded-[2.25rem] bg-gradient-to-tr from-emerald-500 to-indigo-500 opacity-20 blur-[50px] dark:opacity-30" />
+            
+            <div className="relative mx-auto flex max-w-sm flex-col gap-4 rounded-[1.5rem] border border-white/50 bg-white/90 p-5 shadow-xl backdrop-blur-2xl dark:border-white/10 dark:bg-[#0a0a0c]/90">
+              <div className="flex justify-between items-center px-1">
+                <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-zinc-500">Now Playing</span>
+                <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.75 text-[8px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">320kbps</span>
+              </div>
+              
+              <div className="group relative aspect-square w-full overflow-hidden rounded-[1.2rem] bg-zinc-800 bg-[url('https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=800&auto=format&fit=crop')] bg-cover bg-center shadow-md">
+                <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors" />
+              </div>
+              
+              <div className="px-1">
+                <h5 className="text-lg font-black tracking-tight text-gray-900 dark:text-white">Starboy</h5>
+                <p className="text-xs font-bold text-zinc-500 dark:text-zinc-400 mt-0.5">The Weeknd, Daft Punk</p>
+              </div>
+              
+              <div className="space-y-2 px-1">
+                <div className="h-1.5 bg-gray-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 w-1/3 rounded-full relative" />
+                </div>
+                <div className="flex justify-between text-[10px] font-bold text-zinc-400">
+                  <span>1:18</span>
+                  <span>3:50</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between px-2 pt-2">
+                <Shuffle size={18} className="text-zinc-400" />
+                <SkipBack size={24} className="text-gray-900 dark:text-white fill-current" />
+                <div className="w-14 h-14 bg-emerald-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-500/30 cursor-pointer hover:scale-105 transition-transform">
+                  <Pause size={24} className="fill-current" />
+                </div>
+                <SkipForward size={24} className="text-gray-900 dark:text-white fill-current" />
+                <Repeat size={18} className="text-zinc-400" />
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ── How It Works ──────────────────────────────────────────────── */}
+      <section id="how-it-works" className="py-24 px-6 relative z-10 bg-white/40 dark:bg-[#0a0a0c]/40 backdrop-blur-2xl border-y border-gray-200/50 dark:border-white/5">
+        <div className="max-w-[1000px] mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-500 mb-2">Workflow</h2>
+            <h3 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white tracking-tight">Three steps to infinite storage.</h3>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-10 relative">
+            <div className="hidden md:block absolute top-10 left-[20%] right-[20%] h-px bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent" />
+            {steps.map((step, i) => (
+              <motion.div key={i} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} viewport={{ once: true }} className="relative flex flex-col items-center text-center">
+                <div className="w-20 h-20 bg-white dark:bg-zinc-950 rounded-[1.5rem] border-[4px] border-gray-50 dark:border-zinc-900 flex items-center justify-center mb-5 relative z-10 shadow-md">
+                  <span className="text-xl font-black text-indigo-600 dark:text-indigo-400">{step.num}</span>
+                </div>
+                <h4 className="text-base font-extrabold text-gray-900 dark:text-white mb-2 tracking-tight">{step.title}</h4>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium leading-relaxed px-4">{step.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Pricing ───────────────────────────────────────────────────── */}
+      <section id="pricing" className="pt-24 pb-12 px-6 relative z-10">
+        <div className="max-w-[1200px] mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-500 mb-2">Pricing</h2>
+            <h3 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white tracking-tight">Unmetered resources. Simple tiers.</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            {plans.map((plan, i) => (
+              <motion.div 
+                key={i} 
+                initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} viewport={{ once: true }}
+                className={`relative flex flex-col bg-white/80 dark:bg-zinc-900/60 backdrop-blur-xl rounded-[2rem] p-8 transition-all
+                  ${plan.recommended 
+                    ? 'border-2 border-indigo-500 shadow-xl shadow-indigo-500/10 xl:-translate-y-2' 
+                    : 'border border-gray-200/60 dark:border-white/5 hover:border-indigo-500/40 dark:hover:border-indigo-500/40 hover:shadow-md'
+                  }`}
+              >
+                {plan.recommended && (
+                  <div className="absolute -top-3.5 inset-x-0 flex justify-center">
+                    <span className="bg-indigo-500 text-white text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shadow-sm">Recommended</span>
+                  </div>
+                )}
+                
+                <h4 className="text-sm font-bold text-zinc-500 dark:text-zinc-400 mb-2">{plan.name}</h4>
+                <div className="flex items-baseline gap-1 mb-6">
+                  <span className="text-3xl font-black tracking-tighter text-gray-900 dark:text-white">{plan.price}</span>
+                  <span className="text-xs font-bold text-zinc-400">{plan.duration}</span>
+                </div>
+                
+                <div className="flex items-center gap-3 mb-8 px-4 py-3 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl border border-indigo-100 dark:border-indigo-500/20 shadow-inner">
+                  <HardDrive size={16} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200">{plan.storage}</span>
+                </div>
+
+                <ul className="space-y-3 mb-8 flex-1">
+                  {plan.features.map((feat, idx) => (
+                    <li key={idx} className="flex items-start gap-3 text-xs font-medium text-gray-700 dark:text-zinc-300">
+                      <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" strokeWidth={3} />
+                      <span className="leading-snug">{feat}</span>
+                    </li>
+                  ))}
+                </ul>
+                
+                <Link to={user ? "/pricing" : "/register"} className="w-full mt-auto">
+                  <button className={`w-full py-3 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all active:scale-95
+                    ${plan.recommended 
+                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md' 
+                      : 'bg-gray-100 hover:bg-gray-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-900 dark:text-white'
+                    }`}>
+                    Deploy {plan.name}
                   </button>
                 </Link>
               </motion.div>
             ))}
           </div>
-          <p className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">
-            *Storage relies on Telegram's secure infrastructure. By using TeleCloud, you acknowledge that file availability is tied to your Telegram account's active status.
-          </p>
+
+          <div className="grid md:grid-cols-2 gap-6 mt-12">
+            <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="bg-emerald-50/80 dark:bg-emerald-500/10 border border-emerald-200/50 dark:border-emerald-500/20 rounded-[1.5rem] p-6 flex gap-4 backdrop-blur-md">
+              <ShieldCheck size={24} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <div>
+                <h4 className="text-sm font-bold text-emerald-900 dark:text-emerald-300 mb-1.5 tracking-tight">Your Data Never Expires</h4>
+                <p className="text-xs font-medium text-emerald-800/80 dark:text-emerald-400/80 leading-relaxed">
+                  When paid plans end, we <strong>never delete your data</strong>. We only restrict access. Renew at any time to instantly unlock your vault. Your files are safe on our side forever.
+                </p>
+              </div>
+            </motion.div>
+            
+            <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }} className="bg-amber-50/80 dark:bg-amber-500/10 border border-amber-200/50 dark:border-amber-500/20 rounded-[1.5rem] p-6 flex gap-4 backdrop-blur-md">
+              <AlertTriangle size={24} className="text-amber-600 dark:text-amber-400 shrink-0" />
+              <div>
+                <h4 className="text-sm font-bold text-amber-900 dark:text-amber-300 mb-1.5 tracking-tight">Telegram Inactivity Warning</h4>
+                <p className="text-xs font-medium text-amber-800/80 dark:text-amber-400/80 leading-relaxed">
+                  Telecloud uses your Telegram account for storage. If your Telegram account gets closed, banned, or is inactive for more than 6 months, Telegram data loss may take place. We are not responsible for data lost due to Telegram account termination.
+                </p>
+              </div>
+            </motion.div>
+          </div>
         </div>
       </section>
 
-      {/* ── FAQ ──────────────────────────────────────────────────────── */}
-      <section id="faq" className="py-24 px-4">
+      {/* ── FAQ ─────────────────────────────────────────────── */}
+      <section id="faq" className="py-24 px-6 relative z-10 bg-white/40 dark:bg-[#0a0a0c]/40 backdrop-blur-2xl border-t border-gray-200/50 dark:border-white/5">
         <div className="max-w-3xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Frequently Asked Questions</h2>
-            <p className="text-gray-500 dark:text-gray-400">Got questions? We've got answers.</p>
+          <div className="text-center mb-12">
+            <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-500 mb-2">Support</h2>
+            <h3 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white tracking-tight">Frequently Asked Questions</h3>
           </div>
-          <div>
+          
+          <div className="space-y-3">
             {faqs.map((f, i) => (
               <FAQItem key={i} q={f.q} a={f.a} />
             ))}
@@ -256,73 +452,43 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Contact Section ──────────────────────────────────────────── */}
-      <section id="contact" className="py-24 px-4 bg-gray-50 dark:bg-gray-900/30 border-t border-gray-100 dark:border-gray-800">
-        <div className="max-w-4xl mx-auto flex flex-col md:flex-row gap-12 items-center bg-white dark:bg-gray-900 p-8 md:p-12 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm">
-          <div className="flex-1">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Get in touch</h2>
-            <p className="text-gray-500 dark:text-gray-400 mb-8">Have a question forming in your mind? Reach out to us, and we'll get back to you as soon as possible.</p>
-            <div className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
-              <div className="w-10 h-10 rounded-full bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center shrink-0">
-                <Mail size={18} className="text-brand-600 dark:text-brand-400" />
-              </div>
-              <span className="font-medium">sameetpisal@gmail.com</span>
+      {/* ── StackX Lab Pre-Footer ────────────────────── */}
+      <section id="footer-stackx" className="py-20 px-6 relative z-10 bg-white/60 dark:bg-[#0a0a0c]/60 backdrop-blur-2xl border-t border-gray-200/50 dark:border-white/5">
+        <div className="max-w-[1100px] mx-auto flex flex-col md:flex-row items-center justify-between gap-8">
+          <div className="flex flex-col md:flex-row items-center md:items-start text-center md:text-left gap-6">
+            <div className="w-16 h-16 bg-white dark:bg-zinc-900 rounded-2xl flex items-center justify-center shadow-lg border border-gray-100 dark:border-white/5 shrink-0">
+               <StackXLogo size={32} />
+            </div>
+            <div className="max-w-xl">
+              <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">Stack<span className="text-indigo-500">X</span> Lab</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed font-medium">
+                A developer startup building innovative, high-performance applications. Telecloud is proudly developed and maintained as one of our flagship products.
+              </p>
             </div>
           </div>
-          <div className="flex-1 w-full bg-gray-50 dark:bg-gray-950 p-6 rounded-2xl border border-gray-100 dark:border-gray-800">
-            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); alert("Thanks for reaching out! We'll get back to you shortly.") }}>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
-                <input required type="text" className="input bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800" placeholder="John Doe" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
-                <input required type="email" className="input bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800" placeholder="john@example.com" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Message</label>
-                <textarea required rows={4} className="input bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 py-3" placeholder="How can we help?" />
-              </div>
-              <button type="submit" className="w-full btn-primary justify-center">
-                Send Message <Send size={16} className="ml-2" />
-              </button>
-            </form>
-          </div>
+          <a href="mailto:sameetpisal@gmail.com" className="w-full md:w-auto">
+            <button className="w-full md:w-auto px-6 py-3 rounded-full border border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-white font-bold text-sm hover:bg-gray-50 dark:hover:bg-zinc-900 transition-colors shadow-sm">
+              Contact StackX Lab
+            </button>
+          </a>
         </div>
       </section>
 
-      {/* ── Footer ───────────────────────────────────────────────────── */}
-      <footer className="py-12 px-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
-          <div className="flex flex-col gap-4 max-w-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 bg-brand-600 rounded-lg flex items-center justify-center">
-                <Cloud size={12} className="text-white" />
-              </div>
-              <span className="font-semibold text-gray-900 dark:text-white">TeleCloud</span>
-            </div>
-            <p className="text-xs text-gray-400 leading-relaxed">
-              Disclaimer: TeleCloud utilizes Telegram's infrastructure for storage. Data remains available as long as your Telegram account is active. TeleCloud acts as a bridge and is not a guaranteed permanent backup solution.
-            </p>
+      {/* ── Main Footer ────────────────────────────────────────────────────── */}
+      <footer className="py-10 px-6 relative z-10 bg-[#fafafa] dark:bg-[#09090b] border-t border-gray-200/50 dark:border-white/5">
+        <div className="max-w-[1100px] mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+          
+          <TelecloudLogo iconSize={14} textSize="text-base" />
+          
+          <div className="flex flex-wrap items-center justify-center gap-6">
+            <Link to="/terms" className="text-xs font-bold text-zinc-500 hover:text-gray-900 dark:hover:text-white transition-colors">Terms</Link>
+            <Link to="/privacy" className="text-xs font-bold text-zinc-500 hover:text-gray-900 dark:hover:text-white transition-colors">Privacy Policy</Link>
+          </div>
+
+          <div className="text-xs font-bold text-zinc-400">
+            © {new Date().getFullYear()} StackX Lab. All rights reserved.
           </div>
           
-          <div className="flex flex-col sm:flex-row gap-8 sm:gap-12">
-            <div className="flex flex-col gap-3">
-              <span className="text-gray-900 dark:text-white font-semibold text-sm">Product</span>
-              <a href="#features" className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Features</a>
-              <a href="#pricing"  className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Pricing</a>
-              <a href="#faq"      className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">FAQ</a>
-            </div>
-            <div className="flex flex-col gap-3">
-              <span className="text-gray-900 dark:text-white font-semibold text-sm">Company</span>
-              <Link to="/privacy" className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Privacy Policy</Link>
-              <Link to="/terms"   className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Terms of Service</Link>
-              <a href="#contact"  className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Contact</a>
-            </div>
-          </div>
-        </div>
-        <div className="max-w-6xl mx-auto mt-12 pt-8 border-t border-gray-100 dark:border-gray-900">
-          <p className="text-sm text-gray-400 text-center md:text-left">© {new Date().getFullYear()} TeleCloud. All rights reserved.</p>
         </div>
       </footer>
     </div>

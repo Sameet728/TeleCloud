@@ -8,7 +8,6 @@ import useStore from '../store/useStore'
 export default function useUpload(folderId = null) {
   const qc = useQueryClient()
   const { addUpload, updateUpload, removeUpload } = useStore()
-  const esRefs = useRef({})
 
   const upload = useCallback(async (files) => {
     const fileArr = Array.from(files)
@@ -17,72 +16,79 @@ export default function useUpload(folderId = null) {
     const token   = localStorage.getItem('token')
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
 
-    // ── Upload every file independently with its own progress entry ──
     const uploads = fileArr.map(file => ({
       file,
       uploadId: generateUploadId(),
     }))
 
-    // Register all in the store immediately so the panel shows up
     uploads.forEach(({ uploadId, file }) => {
       addUpload(uploadId, file.name)
     })
 
     const results = await Promise.allSettled(
       uploads.map(({ uploadId, file }) => new Promise((resolve, reject) => {
+        const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB
 
-        // Open SSE stream for THIS file's uploadId — this delivers real
-        // Telegram upload progress (20%…92%…complete) from the backend
-        const es = new EventSource(
-          `${baseUrl}/api/progress/${uploadId}?token=${token}`
-        )
-        esRefs.current[uploadId] = es
-
-        es.onmessage = (e) => {
+        ;(async () => {
           try {
-            const { progress, status } = JSON.parse(e.data)
-            updateUpload(uploadId, progress, status)
-            if (status === 'complete') {
-              es.close()
-              delete esRefs.current[uploadId]
-              resolve()
-            } else if (status === 'error') {
-              es.close()
-              delete esRefs.current[uploadId]
-              reject(new Error('Upload error reported by server'))
+            updateUpload(uploadId, 0, 'initializing', '')
+            
+            const { data: initRes } = await filesAPI.initUpload({
+              fileName: file.name,
+              fileSize: file.size,
+              folderId,
+              mimeType: file.type || 'application/octet-stream'
+            })
+            
+            let lastTimestamp = Date.now()
+            let lastSpeed = ''
+            let uploadedBytes = 0
+            let chunkIndex = 0;
+            
+            for (let start = 0; start < file.size; start += CHUNK_SIZE) {
+              const chunk = file.slice(start, start + CHUNK_SIZE);
+              
+              const fd = new FormData();
+              fd.append('uploadId', initRes.data.uploadId);
+              fd.append('startByte', start);
+              fd.append('chunkIndex', chunkIndex);
+              fd.append('chunkSize', CHUNK_SIZE);
+              fd.append('file', chunk);
+
+              await filesAPI.uploadChunk(fd);
+              
+              uploadedBytes += chunk.size;
+              chunkIndex++;
+
+              const now = Date.now()
+              const elapsedMs = now - lastTimestamp
+              if (elapsedMs > 500) {
+                 const bytesPerSec = chunk.size / (elapsedMs / 1000);
+                 if (bytesPerSec >= 1024 * 1024) lastSpeed = `${(bytesPerSec / 1024 / 1024).toFixed(1)} MB/s`
+                 else if (bytesPerSec >= 1024) lastSpeed = `${(bytesPerSec / 1024).toFixed(0)} KB/s`
+                 else lastSpeed = `${(bytesPerSec).toFixed(0)} B/s`
+                 
+                 lastTimestamp = now;
+              }
+              
+              const pct = Math.round((uploadedBytes / file.size) * 95); // reserve last 5% for finalizing
+              updateUpload(uploadId, pct, 'uploading', lastSpeed)
             }
-          } catch {}
-        }
 
-        es.onerror = () => {
-          // SSE can disconnect on complete — that's normal; fall through
-        }
+            updateUpload(uploadId, 99, 'saving', lastSpeed)
+            await filesAPI.finalizeUpload({ uploadId: initRes.data.uploadId });
 
-        // Fire the actual HTTP upload (no onProgress — SSE is the source
-        // of truth for progress so we don't fight ourselves)
-        const fd = new FormData()
-        fd.append('file', file)
-        if (folderId) fd.append('folderId', folderId)
-
-        filesAPI.upload(fd, uploadId)
-          .then(() => {
-            // In case SSE already resolved, this is a no-op.
-            // If SSE missed the complete event, resolve here.
-            updateUpload(uploadId, 100, 'complete')
-            es.close()
-            delete esRefs.current[uploadId]
+            updateUpload(uploadId, 100, 'complete', '')
             resolve()
-          })
-          .catch((err) => {
-            updateUpload(uploadId, 0, 'error')
-            es.close()
-            delete esRefs.current[uploadId]
+
+          } catch (err) {
+            updateUpload(uploadId, 0, 'error', '')
             reject(err)
-          })
+          }
+        })();
       }))
     )
 
-    // Summarise results
     const succeeded = results.filter(r => r.status === 'fulfilled').length
     const failed    = results.filter(r => r.status === 'rejected').length
 
@@ -99,13 +105,10 @@ export default function useUpload(folderId = null) {
 
     if (failed > 0) {
       toast.error(
-        failed === 1
-          ? `1 file failed to upload`
-          : `${failed} files failed to upload`
+        failed === 1 ? `1 file failed to upload` : `${failed} files failed to upload`
       )
     }
 
-    // Remove completed entries from the panel after a short delay
     setTimeout(() => {
       uploads.forEach(({ uploadId }) => removeUpload(uploadId))
     }, 3500)

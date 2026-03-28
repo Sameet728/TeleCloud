@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: transparent; overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 50px; }
+  #ad-mount { display: block; text-align: center; width: 100%; }
+</style>
+</head>
+<body>
+<div id="ad-mount"></div>
+<script>
+  // Read format ID from URL query parameter
+  var params = new URLSearchParams(window.location.search);
+  var formatId = params.get('f') || '2018497';
+  
+  // Set the mount div's id to the format ID (what MyBid looks for)
+  document.getElementById('ad-mount').id = formatId;
+  
+  // Load MyBid script
+  var s = document.createElement('script');
+  s.async = true;
+  s.src = 'https://js.mbidadm.com/static/scripts.js';
+  s.setAttribute('data-admpid', '433036');
+  document.head.appendChild(s);
+</script>
+</body>
+</html>

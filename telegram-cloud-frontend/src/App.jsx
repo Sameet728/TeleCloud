@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import ProtectedRoute from './components/ProtectedRoute'
+import AppToaster from './components/AppToaster'
 import MainLayout from './layouts/MainLayout'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
@@ -14,14 +15,18 @@ import Shared from './pages/Shared'
 import PublicShare from './pages/PublicShare'
 import Pricing from './pages/Pricing'
 import Profile from './pages/Profile'
+import Music from './pages/Music'
+import MusicPlaylists from './pages/MusicPlaylists'
 import Terms from './pages/Terms'
 import Privacy from './pages/Privacy'
+import FileViewPage from './pages/FileViewPage'
 
 export default function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
+          <AppToaster />
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
@@ -42,6 +47,9 @@ export default function App() {
               <Route path="/shared" element={<Shared />} />
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/music" element={<Music />} />
+              <Route path="/music/playlists" element={<MusicPlaylists />} />
+              <Route path="/view/:fileId" element={<FileViewPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

@@ -1,23 +1,31 @@
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { X, Folder } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Folder } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useQueryClient } from '@tanstack/react-query'
 import { foldersAPI } from '../services/api'
+import ModalShell from './ui/ModalShell'
+import AppButton from './ui/AppButton'
 
-const COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#3b82f6','#ec4899','#8b5cf6','#14b8a6']
+const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#ec4899', '#8b5cf6', '#14b8a6']
 
 export default function CreateFolderModal({ open, parentFolderId, onClose, existingFolder }) {
-  const qc      = useQueryClient()
-  const [name, setName]   = useState(existingFolder?.name || '')
+  const qc = useQueryClient()
+  const [name, setName] = useState(existingFolder?.name || '')
   const [color, setColor] = useState(existingFolder?.color || COLORS[0])
   const [loading, setLoading] = useState(false)
   const editing = !!existingFolder
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  useEffect(() => {
+    if (!open) return
+    setName(existingFolder?.name || '')
+    setColor(existingFolder?.color || COLORS[0])
+  }, [existingFolder, open])
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
     if (!name.trim()) return
     setLoading(true)
+
     try {
       if (editing) {
         await foldersAPI.update(existingFolder._id, { name, color })
@@ -31,63 +39,75 @@ export default function CreateFolderModal({ open, parentFolderId, onClose, exist
       onClose()
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed')
-    } finally { setLoading(false) }
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-          onClick={e => e.target === e.currentTarget && onClose()}
-        >
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-            className="card w-full max-w-sm p-6"
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      icon={Folder}
+      iconClassName="text-indigo-500 dark:text-indigo-300"
+      title={editing ? 'Rename Folder' : 'Create New Folder'}
+      subtitle={editing ? 'Update the folder name and color theme.' : 'Spin up a new directory with a polished color identity.'}
+      maxWidth="max-w-md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="flex justify-center">
+          <div
+            className="flex h-24 w-24 items-center justify-center rounded-[2rem] border border-white/40 shadow-inner transition-transform duration-300 hover:scale-105 dark:border-white/10"
+            style={{ background: `linear-gradient(135deg, ${color}18, ${color}35)` }}
           >
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {editing ? 'Rename folder' : 'New folder'}
-              </h2>
-              <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">
-                <X size={18} />
-              </button>
-            </div>
+            <Folder size={44} style={{ color }} fill={color} fillOpacity={0.28} />
+          </div>
+        </div>
 
-            {/* Preview */}
-            <div className="flex justify-center mb-5">
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: color + '22' }}>
-                <Folder size={32} style={{ color }} fill={color} fillOpacity={0.3} />
-              </div>
-            </div>
+        <div>
+          <label className="mb-2 block pl-1 text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
+            Folder Name
+          </label>
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            className="input"
+            placeholder="My Documents"
+            autoFocus
+          />
+        </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <input
-                value={name} onChange={e => setName(e.target.value)}
-                className="input" placeholder="Folder name" autoFocus
-              />
-              <div>
-                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">Color</label>
-                <div className="flex gap-2 flex-wrap">
-                  {COLORS.map(c => (
-                    <button key={c} type="button" onClick={() => setColor(c)}
-                      className={`w-7 h-7 rounded-lg transition-transform ${color === c ? 'scale-125 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-gray-900' : 'hover:scale-110'}`}
-                      style={{ background: c, ringColor: c }} />
-                  ))}
-                </div>
-              </div>
-              <div className="flex gap-3 pt-1">
-                <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
-                <button type="submit" disabled={loading || !name.trim()} className="btn-primary flex-1">
-                  {loading ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : null}
-                  {editing ? 'Save' : 'Create'}
+        <div>
+          <label className="mb-3 block pl-1 text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
+            Color Theme
+          </label>
+          <div className="grid grid-cols-4 gap-3 sm:grid-cols-8">
+            {COLORS.map((shade) => {
+              const active = color === shade
+              return (
+                <button
+                  key={shade}
+                  type="button"
+                  onClick={() => setColor(shade)}
+                  className={`relative h-11 rounded-[1.2rem] transition-transform ${active ? 'scale-105 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-[#12141b]' : 'hover:scale-[1.03]'}`}
+                  style={{ background: shade, ringColor: shade }}
+                >
+                  {active ? <span className="absolute inset-0 rounded-[1.2rem] border border-white/70" /> : null}
                 </button>
-              </div>
-            </form>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 pt-1 sm:flex-row">
+          <AppButton variant="secondary" fullWidth onClick={onClose}>
+            Cancel
+          </AppButton>
+          <AppButton fullWidth loading={loading} disabled={!name.trim()} type="submit">
+            {editing ? 'Save Changes' : 'Create Folder'}
+          </AppButton>
+        </div>
+      </form>
+    </ModalShell>
   )
 }

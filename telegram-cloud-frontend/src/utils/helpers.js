@@ -20,15 +20,30 @@ export const formatDateShort = (date) => {
   }).format(new Date(date))
 }
 
-export const getMimeCategory = (mime = '') => {
+// Map of code-file extensions for syntax highlighting detection
+const CODE_EXTENSIONS = new Set([
+  'js','jsx','ts','tsx','json','html','htm','css','scss','less','py','java','c','cpp','h',
+  'cs','go','rs','rb','php','sql','xml','yaml','yml','md','sh','bash','bat','ps1','swift',
+  'kt','dart','lua','r','toml','ini','env','gitignore','dockerfile','makefile'
+])
+
+export const getFileExtension = (name = '') => {
+  const parts = name.split('.')
+  return parts.length > 1 ? parts.pop().toLowerCase() : ''
+}
+
+export const getMimeCategory = (mime = '', fileName = '') => {
+  const ext = getFileExtension(fileName)
   if (mime.startsWith('image/'))        return 'image'
   if (mime.startsWith('video/'))        return 'video'
   if (mime.startsWith('audio/'))        return 'audio'
   if (mime === 'application/pdf')       return 'pdf'
   if (mime.includes('zip') || mime.includes('rar') || mime.includes('tar')) return 'archive'
-  if (mime.includes('word') || mime.includes('document'))  return 'doc'
-  if (mime.includes('sheet') || mime.includes('excel'))    return 'sheet'
-  if (mime.startsWith('text/'))         return 'text'
+  if (mime.includes('presentation') || mime.includes('powerpoint') || ext === 'pptx' || ext === 'ppt') return 'presentation'
+  if (mime.includes('word') || mime.includes('document') || ext === 'docx' || ext === 'doc') return 'doc'
+  if (mime.includes('sheet') || mime.includes('excel') || mime.includes('csv') || ext === 'xlsx' || ext === 'xls' || ext === 'csv') return 'sheet'
+  if (CODE_EXTENSIONS.has(ext))         return 'code'
+  if (mime.startsWith('text/') || mime === 'application/json' || mime === 'application/javascript') return 'code'
   return 'other'
 }
 

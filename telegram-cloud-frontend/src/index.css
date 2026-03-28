@@ -1,50 +1,204 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
+  html {
+    scroll-behavior: smooth;
+    color-scheme: light;
+    font-size: 14px;
+  }
+  @media (max-width: 640px) {
+    html {
+      font-size: 14.5px;
+    }
+  }
+  @media (min-width: 1280px) {
+    html {
+      font-size: 13px;
+    }
+  }
+  html.dark { color-scheme: dark; }
+  html, body, #root {
+    min-height: 100%;
+  }
   body {
-    @apply bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100;
-    font-family: 'Inter', system-ui, sans-serif;
+    @apply text-gray-900 dark:text-gray-100;
+    font-family: 'Plus Jakarta Sans', Inter, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
+    background:
+      radial-gradient(circle at top, rgba(99, 102, 241, 0.11), transparent 32%),
+      radial-gradient(circle at 85% 12%, rgba(16, 185, 129, 0.08), transparent 24%),
+      linear-gradient(180deg, #fafafa 0%, #f4f7fb 100%);
+    transition: background-color 180ms ease, color 180ms ease;
+  }
+  .dark body {
+    background:
+      radial-gradient(circle at top, rgba(99, 102, 241, 0.16), transparent 30%),
+      radial-gradient(circle at 82% 18%, rgba(16, 185, 129, 0.07), transparent 22%),
+      linear-gradient(180deg, #090a0f 0%, #0d1117 100%);
+  }
+  body::selection {
+    background: rgba(99, 102, 241, 0.28);
+  }
+  button, a, input, textarea, select {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
   }
 }
 
 @layer components {
+  .app-shell-bg {
+    position: relative;
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.16) 1px, transparent 0),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0));
+    background-size: 28px 28px, auto;
+    background-position: top left;
+  }
+  .dark .app-shell-bg {
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.055) 1px, transparent 0),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0));
+  }
+  .app-page {
+    @apply relative mx-auto w-full max-w-[1680px] space-y-2.5 pb-10;
+  }
+  .app-panel {
+    @apply relative overflow-hidden border backdrop-blur-2xl;
+    border-radius: 14px;
+    border-color: rgba(226, 232, 240, 0.72);
+    background: rgba(255, 255, 255, 0.78);
+    box-shadow:
+      0 14px 30px -24px rgba(15, 23, 42, 0.18),
+      inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  }
+  .dark .app-panel {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(17, 19, 26, 0.78);
+    box-shadow:
+      0 14px 30px -24px rgba(0, 0, 0, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+  .app-panel-muted {
+    @apply app-panel;
+    background: rgba(255, 255, 255, 0.58);
+  }
+  .dark .app-panel-muted {
+    background: rgba(13, 16, 24, 0.66);
+  }
+  .app-hero {
+    @apply app-panel px-2.5 py-2.5 sm:px-3 sm:py-3 lg:px-3.5 lg:py-3.5;
+  }
+  .app-pill {
+    @apply inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em];
+    border-color: rgba(99, 102, 241, 0.14);
+    background: rgba(99, 102, 241, 0.08);
+    color: rgb(79 70 229);
+  }
+  .dark .app-pill {
+    border-color: rgba(129, 140, 248, 0.18);
+    background: rgba(99, 102, 241, 0.14);
+    color: rgb(165 180 252);
+  }
+  .app-kicker {
+    @apply text-[8px] font-bold uppercase tracking-[0.19em] text-indigo-500 dark:text-indigo-400;
+  }
+  .app-title {
+    @apply font-display text-[1.3rem] font-bold tracking-tight text-gray-900 dark:text-white sm:text-[1.7rem];
+  }
+  .app-subtitle {
+    @apply mt-1 max-w-2xl text-[9px] font-medium leading-relaxed text-zinc-500 dark:text-zinc-400 sm:text-[10px];
+  }
+  .app-section-title {
+    @apply text-[10px] font-bold uppercase tracking-[0.15em] text-zinc-500 dark:text-zinc-400;
+  }
+  .app-divider {
+    @apply h-px bg-gradient-to-r from-transparent via-gray-200/80 to-transparent dark:via-white/10;
+  }
+  .app-button-primary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-semibold text-white transition-all active:scale-[0.98];
+    background: linear-gradient(135deg, rgb(79 70 229), rgb(99 102 241));
+    box-shadow: 0 18px 32px -18px rgba(79, 70, 229, 0.75);
+  }
+  .app-button-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 22px 38px -18px rgba(79, 70, 229, 0.7);
+  }
+  .app-button-secondary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-semibold text-zinc-700 transition-all active:scale-[0.98] dark:text-zinc-200;
+    border-color: rgba(226, 232, 240, 0.9);
+    background: rgba(255, 255, 255, 0.8);
+  }
+  .dark .app-button-secondary {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(17, 19, 26, 0.78);
+  }
+  .app-button-secondary:hover {
+    transform: translateY(-1px);
+    border-color: rgba(99, 102, 241, 0.3);
+  }
+  .app-icon-button {
+    @apply inline-flex items-center justify-center rounded-[0.75rem] border p-1 text-zinc-500 transition-all active:scale-95 dark:text-zinc-300;
+    border-color: rgba(226, 232, 240, 0.9);
+    background: rgba(255, 255, 255, 0.75);
+  }
+  .dark .app-icon-button {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(17, 19, 26, 0.82);
+  }
+  .app-icon-button:hover {
+    transform: translateY(-1px);
+    border-color: rgba(99, 102, 241, 0.26);
+    color: rgb(79 70 229);
+  }
+  .dark .app-icon-button:hover {
+    color: rgb(165 180 252);
+  }
+  .app-input-surface {
+    @apply w-full rounded-full border bg-white/80 px-2.5 py-1 text-[10px] font-medium text-gray-900 shadow-sm outline-none transition-all placeholder:text-zinc-400 dark:bg-[#0f131c]/80 dark:text-white dark:placeholder:text-zinc-500;
+    border-color: rgba(226, 232, 240, 0.9);
+  }
+  .dark .app-input-surface {
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .app-input-surface:focus {
+    border-color: rgba(99, 102, 241, 0.34);
+    box-shadow:
+      0 0 0 4px rgba(99, 102, 241, 0.12),
+      0 18px 40px -24px rgba(79, 70, 229, 0.32);
+  }
   .btn-primary {
-    @apply inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-600 text-white
-           font-medium text-sm hover:bg-brand-700 active:scale-95 transition-all duration-150
-           disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply app-button-primary disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-secondary {
-    @apply inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800
-           border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200
-           font-medium text-sm hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95
-           transition-all duration-150;
+    @apply app-button-secondary;
   }
   .btn-danger {
-    @apply inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 text-white
-           font-medium text-sm hover:bg-red-700 active:scale-95 transition-all duration-150;
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[0.85rem] bg-red-600 text-white
+           font-medium text-xs hover:bg-red-700 active:scale-95 transition-all duration-150;
   }
   .card {
-    @apply bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800
-           shadow-sm;
+    @apply app-panel;
   }
   .input {
-    @apply w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700
-           bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100
-           placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500
-           focus:border-transparent transition-all text-sm;
+    @apply app-input-surface rounded-[1rem] px-2.5 py-1;
   }
   .sidebar-link {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
-           text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800
-           hover:text-gray-900 dark:hover:text-gray-100 transition-all;
+    @apply flex items-center gap-1.5 px-1.5 py-1 rounded-[0.85rem] text-[11px] font-medium transition-all;
   }
   .sidebar-link.active {
-    @apply bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400;
+    @apply text-brand-600 dark:text-brand-400;
   }
 }
 
@@ -57,3 +211,5 @@
   background: linear-gradient(90deg, #6366f1 0%, #818cf8 100%);
   transition: width 0.3s ease;
 }
+
+
