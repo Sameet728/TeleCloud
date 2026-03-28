@@ -10,8 +10,8 @@ from ytmusicapi import YTMusic
 import yt_dlp
 
 
-HOST = os.getenv("MUSIC_SERVICE_HOST", "127.0.0.1")
-PORT = int(os.getenv("MUSIC_SERVICE_PORT", "8001"))
+HOST = "0.0.0.0"
+PORT = int(os.environ.get("PORT", 10000))
 DEFAULT_COUNTRY = os.getenv("MUSIC_SERVICE_COUNTRY", "IN")
 
 _CACHE = {}
