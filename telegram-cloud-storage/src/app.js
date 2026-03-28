@@ -43,8 +43,21 @@ logger.info("Background cleanup service initialized");
 
 
 // ── CORS ───────────────────────────────────────────────────────
+const allowedOrigins = [
+  "https://telecloud-tau.vercel.app",
+  "http://localhost:5173"
+];
+
 app.use(cors({
-  origin: true,  // reflect any origin (dev + prod)
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true); // allow Postman / curl
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error("CORS not allowed"));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: [
     "Content-Type",
@@ -63,7 +76,10 @@ app.use(cors({
   credentials: true,
 }));
 
-app.options("*", cors());
+app.options("*", cors({
+  origin: allowedOrigins,
+  credentials: true
+}));
 
 
 
