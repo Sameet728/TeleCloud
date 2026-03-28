@@ -63,6 +63,10 @@ const userSchema = new mongoose.Schema(
       type:    Date,
       default: null,
     },
+    lastFetchedMessageId: {
+      type:    Number,
+      default: 0, // Used for incremental Telegram sync
+    },
   },
   { timestamps: true }
 );

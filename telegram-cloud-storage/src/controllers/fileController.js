@@ -20,127 +20,150 @@ const File     = require("../models/File");
 const Folder   = require("../models/Folder");
 const User     = require("../models/User");
 const telegram = require("../utils/telegram");
-const progress = require("../utils/progressStore");
 const { asyncHandler, sendSuccess, sendError, sanitizeFileName } = require("../utils/helpers");
 const logger   = require("../utils/logger");
 
-// ── Upload file ───────────────────────────────────────────────────
-exports.uploadFile = (req, res, next) => {
-  const user     = req.user;
-  const uploadId = req.headers["x-upload-id"] || crypto.randomUUID();
-  progress.create(uploadId);
+// ── Global Upload Session Store ─────────────────────────────────────
+const uploadSessions = new Map();
+const TELEGRAM_PART_SIZE = 512 * 1024; // Exactly 512KB for MTProto
 
-  const busboy  = Busboy({
-    headers:  req.headers,
-    limits: { fileSize: (parseInt(process.env.MAX_FILE_SIZE_MB) || 2000) * 1024 * 1024 },
+// ── 1. Init Upload ────────────────────────────────────────────────
+exports.initUpload = asyncHandler(async (req, res) => {
+  const { fileName, fileSize, folderId, mimeType } = req.body;
+  if (!fileName || !fileSize) return sendError(res, "Missing file metadata", 400);
+
+  const uploadId = crypto.randomUUID();
+  const telegramFileId = telegram.generateTelegramFileId();
+  const totalParts = Math.ceil(fileSize / TELEGRAM_PART_SIZE);
+
+  uploadSessions.set(uploadId, {
+    telegramFileId,
+    totalParts,
+    fileSize,
+    fileName: sanitizeFileName(fileName) || "file",
+    mimeType: mimeType || "application/octet-stream",
+    folderId: folderId || null,
+    userId: req.user._id,
+    createdAt: Date.now()
   });
 
-  let tmpPath      = null;
-  let originalName = "file";
-  let mimeType     = "application/octet-stream";
-  let folderId     = req.query.folderId || null;
-  let fileSize     = 0;
+  // Cleanup abandoned sessions after 24 hours
+  setTimeout(() => uploadSessions.delete(uploadId), 24 * 60 * 60 * 1000);
 
-  // Parse form fields (must appear before file field in the multipart form)
+  sendSuccess(res, { uploadId, telegramFileId: telegramFileId.toString(), totalParts }, "Upload initialized");
+});
+
+// ── 2. Chunk Upload ───────────────────────────────────────────────
+exports.uploadChunk = asyncHandler(async (req, res, next) => {
+  const busboy = Busboy({ headers: req.headers });
+  
+  let uploadId = null;
+  let startByte = 0;
+  let bufferChunks = [];
+
   busboy.on("field", (name, value) => {
-    if (name === "folderId") folderId = value || null;
+    if (name === "uploadId") uploadId = value;
+    if (name === "startByte") startByte = parseInt(value, 10) || 0;
   });
 
-  let writeStreamFinished = null; // Promise that resolves when file is fully on disk
-
-  busboy.on("file", (_fieldname, stream, info) => {
-    originalName = sanitizeFileName(info.filename) || "file";
-    mimeType     = info.mimeType || "application/octet-stream";
-    tmpPath      = path.join(os.tmpdir(), `tcs_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`);
-
-    const writeStream = fs.createWriteStream(tmpPath);
-    stream.pipe(writeStream);
-
-    stream.on("data", (chunk) => { fileSize += chunk.length; });
-    stream.on("limit", () => {
-      stream.destroy();
-      progress.fail(uploadId, "File exceeds maximum allowed size");
-      if (!res.headersSent) sendError(res, "File exceeds maximum allowed size", 413);
-    });
-
-    // ⚠️ Wait for writeStream to finish flushing before proceeding.
-    // Without this, busboy 'finish' can fire before the OS buffer is
-    // flushed — Telegram then reads an empty/partial file → FILE_PARTS_INVALID.
-    writeStreamFinished = new Promise((resolve, reject) => {
-      writeStream.on("finish", resolve);
-      writeStream.on("error", reject);
-    });
+  busboy.on("file", (_fieldname, stream) => {
+    stream.on("data", (data) => bufferChunks.push(data));
   });
 
   busboy.on("finish", async () => {
-    if (!tmpPath || res.headersSent) return;
-
-    // Wait until the write stream has fully flushed to disk
-    try { if (writeStreamFinished) await writeStreamFinished; }
-    catch (err) { progress.fail(uploadId, err.message); return next(err); }
+    if (!uploadId || !uploadSessions.has(uploadId)) {
+      if (!res.headersSent) return sendError(res, "Invalid or expired upload session", 400);
+      return;
+    }
+    const session = uploadSessions.get(uploadId);
+    if (session.userId.toString() !== req.user._id.toString()) {
+      if (!res.headersSent) return sendError(res, "Unauthorized upload session", 403);
+      return;
+    }
 
     try {
-      // Verify folder belongs to user
-      if (folderId) {
-        const folder = await Folder.findOne({ _id: folderId, userId: user._id });
-        if (!folder) return sendError(res, "Folder not found", 404);
+      const client = await telegram.getClientForUser(req.user);
+      const fullBuffer = Buffer.concat(bufferChunks);
+      
+      let telegramStartPart = Math.floor(startByte / TELEGRAM_PART_SIZE);
+      
+      for (let i = 0; i < fullBuffer.length; i += TELEGRAM_PART_SIZE) {
+        const partBuffer = fullBuffer.slice(i, i + TELEGRAM_PART_SIZE);
+        await telegram.uploadBigFilePart(
+          client,
+          session.telegramFileId,
+          session.totalParts,
+          telegramStartPart++,
+          partBuffer
+        );
       }
 
-      progress.update(uploadId, 10, "connecting");
-
-      const client = await telegram.getClientForUser(user);
-
-      progress.update(uploadId, 20, "uploading");
-
-      const messageId = await telegram.uploadToSavedMessages(
-        client,
-        tmpPath,
-        originalName,
-        (sent, total) => {
-          if (total > 0) {
-            const pct = 20 + Math.round((sent / total) * 70);
-            progress.update(uploadId, pct, "uploading");
-          }
-        }
-      );
-
-      progress.update(uploadId, 92, "saving");
-
-      const file = await File.create({
-        fileName:     originalName,
-        originalName,
-        mimeType,
-        fileSize,
-        messageId,
-        folderId:     folderId || null,
-        userId:       user._id,
-      });
-
-      // Update user storage usage
-      await User.findByIdAndUpdate(user._id, { $inc: { storageUsed: fileSize } });
-
-      progress.complete(uploadId);
-
-      sendSuccess(res, { file, uploadId }, "File uploaded successfully", 201);
+      if (!res.headersSent) sendSuccess(res, { success: true }, "Chunk uploaded successfully");
     } catch (err) {
-      progress.fail(uploadId, err.message);
-      logger.error("Upload error:", err);
-      next(err);
-    } finally {
-      // Always clean up tmp file
-      if (tmpPath) {
-        fs.unlink(tmpPath, () => {});
-      }
+      logger.error("Chunk upload error:", err);
+      if (!res.headersSent) next(err);
     }
   });
 
   busboy.on("error", (err) => {
-    progress.fail(uploadId, err.message);
-    next(err);
+    if (!res.headersSent) next(err);
   });
 
   req.pipe(busboy);
-};
+});
+
+// ── 3. Finalize Upload ────────────────────────────────────────────
+exports.finalizeUpload = asyncHandler(async (req, res, next) => {
+  const { uploadId } = req.body;
+  
+  if (!uploadId || !uploadSessions.has(uploadId)) {
+    return sendError(res, "Invalid or expired upload session", 400);
+  }
+  
+  const session = uploadSessions.get(uploadId);
+  if (session.userId.toString() !== req.user._id.toString()) {
+    return sendError(res, "Unauthorized upload session", 403);
+  }
+
+  try {
+    const client = await telegram.getClientForUser(req.user);
+    
+    // Finalize MTProto message
+    const messageId = await telegram.finalizeBigFile(
+      client,
+      session.telegramFileId,
+      session.totalParts,
+      session.fileName,
+      session.mimeType
+    );
+
+    // Save MongoDB record
+    if (session.folderId) {
+      const folder = await Folder.findOne({ _id: session.folderId, userId: req.user._id });
+      if (!folder) return sendError(res, "Folder not found", 404);
+    }
+
+    const file = await File.create({
+      fileName: session.fileName,
+      originalName: session.fileName,
+      mimeType: session.mimeType,
+      fileSize: session.fileSize,
+      messageId,
+      folderId: session.folderId || null,
+      userId: req.user._id,
+    });
+
+    await User.findByIdAndUpdate(req.user._id, { $inc: { storageUsed: session.fileSize } });
+    
+    // Clean up session
+    uploadSessions.delete(uploadId);
+
+    sendSuccess(res, { file }, "File successfully finalized and saved", 201);
+  } catch (err) {
+    logger.error("Finalize upload error:", err);
+    next(err);
+  }
+});
 
 // ── Download file ─────────────────────────────────────────────────
 exports.downloadFile = asyncHandler(async (req, res) => {
@@ -148,7 +171,7 @@ exports.downloadFile = asyncHandler(async (req, res) => {
   if (!file) return sendError(res, "File not found", 404);
 
   const client = await telegram.getClientForUser(req.user);
-  await telegram.streamFile(client, file.messageId, res, file.mimeType, file.fileName, false);
+  await telegram.streamFile(client, file.messageId, res, file.mimeType, file.fileName, false, req, file.fileSize);
 });
 
 // ── Preview file (inline) ─────────────────────────────────────────
@@ -156,7 +179,7 @@ exports.previewFile = asyncHandler(async (req, res) => {
   const file = await File.findOne({ _id: req.params.id, userId: req.user._id });
   if (!file) return sendError(res, "File not found", 404);
 
-  // 🔥 VERY IMPORTANT FIX (ADD THESE 3 LINES)
+  // Consider restricting frame-ancestors to your specific frontend domain in production
   res.setHeader("Content-Security-Policy", "frame-ancestors *");
   res.setHeader("X-Frame-Options", "ALLOWALL");
   res.setHeader("Content-Disposition", "inline");
@@ -169,7 +192,9 @@ exports.previewFile = asyncHandler(async (req, res) => {
     res,
     file.mimeType,
     file.fileName,
-    true
+    true,
+    req,
+    file.fileSize
   );
 });
 
@@ -293,15 +318,20 @@ exports.downloadZip = asyncHandler(async (req, res) => {
       try {
         const messages = await client.getMessages("me", { ids: [f.messageId] });
         if (messages && messages[0] && messages[0].media) {
-           const buffer = await client.downloadMedia(messages[0], { workers: 4 });
-           if (buffer) {
-             let fpath = prefix + f.fileName;
-             // duplicate name resolution
-             while (pendingPaths.has(fpath)) fpath = prefix + Math.random().toString(36).substr(2, 4) + "_" + f.fileName;
-             pendingPaths.add(fpath);
-             
-             archive.append(buffer, { name: fpath });
-           }
+             const stream = await telegram.createTelegramReadable(client, f.messageId);
+             if (stream) {
+               let fpath = prefix + f.fileName;
+               // duplicate name resolution
+               while (pendingPaths.has(fpath)) fpath = prefix + Math.random().toString(36).substr(2, 4) + "_" + f.fileName;
+               pendingPaths.add(fpath);
+               
+               archive.append(stream, { name: fpath });
+               // Wait for this stream to be fully appended before fetching next file
+               await new Promise((resolve) => {
+                 stream.on('end', resolve);
+                 stream.on('error', resolve); // Move to next file on error
+               });
+             }
         }
       } catch (err) {
         logger.error(`Failed to DL ${f.fileName} for zip:`, err.message);

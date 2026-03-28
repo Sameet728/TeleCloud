@@ -10,7 +10,9 @@ const checkStorageLimit = require("../middleware/checkStorageLimit");
 router.use(protect);
 
 router.get("/",              ctrl.listFiles);
-router.post("/upload",       checkStorageLimit, ctrl.uploadFile);
+router.post("/upload/init",  checkStorageLimit, ctrl.initUpload);
+router.post("/upload/chunk", checkStorageLimit, ctrl.uploadChunk);
+router.post("/upload/finalize", checkStorageLimit, ctrl.finalizeUpload);
 router.post("/bulk-delete",  ctrl.bulkDelete);
 router.post("/zip-token",    ctrl.getZipToken);
 router.get("/download-zip",  ctrl.downloadZip);

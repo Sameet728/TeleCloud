@@ -40,6 +40,11 @@ const fileSchema = new mongoose.Schema(
       type:    Boolean,
       default: false,
     },
+    source: {
+      type:    String,
+      enum:    ["upload", "telegram-import"],
+      default: "upload",
+    },
     userId: {
       type:     mongoose.Schema.Types.ObjectId,
       ref:      "User",

@@ -21,6 +21,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.3",
     "morgan": "^1.10.0",
+    "nodemailer": "^8.0.3",
     "razorpay": "^2.9.6",
     "resend": "^6.9.4",
     "telegram": "^2.26.22",

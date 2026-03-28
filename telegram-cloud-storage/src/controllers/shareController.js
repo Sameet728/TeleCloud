@@ -42,7 +42,7 @@ exports.createShare = asyncHandler(async (req, res) => {
     allowDownload: allowDownload !== undefined ? allowDownload : true,
   });
 
-  const clientOrigin = process.env.CLIENT_ORIGIN || "http://localhost:3000";
+  const clientOrigin = "http://localhost:3000";
   const shareUrl = `${clientOrigin}/s/${token}`;
   sendSuccess(res, { share, shareUrl }, "Share link created", 201);
 });
@@ -159,7 +159,7 @@ exports.publicDownload = asyncHandler(async (req, res) => {
     return sendError(res, "Downloading is disabled for this link", 403);
   }
 
-  await telegram.streamFile(client, targetFile.messageId, res, targetFile.mimeType, targetFile.fileName, inline);
+  await telegram.streamFile(client, targetFile.messageId, res, targetFile.mimeType, targetFile.fileName, inline, req, targetFile.fileSize);
 
   // Increment download count (only for file downloads, or per-root-share logic)
   if (!inline && share.fileId) {
@@ -207,12 +207,16 @@ exports.publicDownloadZip = asyncHandler(async (req, res) => {
       try {
         const messages = await client.getMessages("me", { ids: [f.messageId] });
         if (messages && messages[0] && messages[0].media) {
-           const buffer = await client.downloadMedia(messages[0], { workers: 4 });
-           if (buffer) {
+           const stream = await telegram.createTelegramReadable(client, f.messageId);
+           if (stream) {
              let fpath = prefix + f.fileName;
              while (pendingPaths.has(fpath)) fpath = prefix + Math.random().toString(36).substr(2, 4) + "_" + f.fileName;
              pendingPaths.add(fpath);
-             archive.append(buffer, { name: fpath });
+             archive.append(stream, { name: fpath });
+             await new Promise((resolve) => {
+               stream.on('end', resolve);
+               stream.on('error', resolve);
+             });
            }
         }
       } catch (err) {}

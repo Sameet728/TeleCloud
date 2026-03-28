@@ -12,10 +12,15 @@ const PORT = process.env.PORT || 5000;
 
 // Connect to MongoDB then start server
 connectDB().then(() => {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT} [${process.env.NODE_ENV}]`);
     logger.info(`🚀 Server running on port ${PORT} [${process.env.NODE_ENV}]`);
   });
+
+  // ── Critical: large file uploads/streams need long timeouts ──────
+  server.setTimeout(15 * 60 * 1000);       // 15 minutes
+  server.headersTimeout = 15 * 60 * 1000 + 10_000;
+  server.keepAliveTimeout = 5 * 60 * 1000;
 }).catch((err) => {
   logger.error("Failed to connect to MongoDB:", err);
   process.exit(1);
