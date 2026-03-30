@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react'
-import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, Download, ZoomIn, ZoomOut, RotateCw, Volume2,
@@ -12,7 +12,6 @@ import FileIcon from '../utils/fileIcons'
 import { useTheme } from '../context/ThemeContext'
 import AdSlot, { useAdGuard } from './AdBanner'
 import DownloadAdGate from './DownloadAdGate'
-import VideoPlayer from './VideoPlayer'
 import UI_LAYERS from '../constants/uiLayers'
 
 // Lazy-loaded viewers (code-split to minimize initial bundle)
@@ -267,6 +266,31 @@ function GenericPreview({ file, cat, dark, onDownload }) {
   )
 }
 
+function VideoRoutePrompt({ file, dark, onOpenPlayer }) {
+  return (
+    <div className="flex w-full max-w-lg flex-col items-center justify-center gap-6 px-5 py-10 text-center">
+      <div className="rounded-[1.7rem] border border-white/10 bg-white/5 p-5 shadow-[0_25px_70px_-38px_rgba(0,0,0,0.8)] backdrop-blur-xl">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1rem] bg-violet-500/15 text-violet-200">
+          <FileIcon mimeType={file.mimeType} size={32} />
+        </div>
+        <h3 className={`mt-5 text-xl font-bold tracking-tight ${dark ? 'text-white' : 'text-gray-900'}`}>
+          Open in dedicated player
+        </h3>
+        <p className={`mt-3 text-sm leading-relaxed ${dark ? 'text-white/55' : 'text-gray-500'}`}>
+          Videos now use the dedicated playback route so the pre-roll ad attempt, fallback overlay, resume state, and gesture controls all stay in one place.
+        </p>
+        <button
+          type="button"
+          onClick={onOpenPlayer}
+          className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-bold text-zinc-950 transition-transform hover:scale-[1.02] active:scale-[0.98]"
+        >
+          Open video player
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Thumbnail strip ───────────────────────────────────────────────────
 function ThumbnailStrip({ files, currentIdx, onSelect, dark }) {
   const token = localStorage.getItem('token')
@@ -330,7 +354,14 @@ function ThumbnailStrip({ files, currentIdx, onSelect, dark }) {
 }
 
 // ── Main modal ────────────────────────────────────────────────────────
-export default function PreviewModal({ open, file, files = [], onClose }) {
+export default function PreviewModal({
+  open,
+  file,
+  files = [],
+  onClose,
+  ensureViewerContextToken = null,
+}) {
+  const navigate = useNavigate()
   const { dark } = useTheme()
   const token    = localStorage.getItem('token')
   const canShowAds = useAdGuard()
@@ -338,12 +369,33 @@ export default function PreviewModal({ open, file, files = [], onClose }) {
   const [audioMiniMode, setAudioMiniMode] = useState(false)
   const [bgAudioFile, setBgAudioFile] = useState(null)
   const [forceAudioOpen, setForceAudioOpen] = useState(false)
+  const [publicViewerContextToken, setPublicViewerContextToken] = useState(file?._viewerContextToken || null)
 
   // Find starting index from the files array
   const startIdx = file && files.length ? files.findIndex(f => f._id === file._id) : 0
   const [idx, setIdx] = useState(Math.max(0, startIdx))
 
   const current = files.length ? files[idx] : file
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (current?._publicToken && ensureViewerContextToken) {
+      ensureViewerContextToken(current, 'public_share_preview')
+        .then((contextToken) => {
+          if (!cancelled) setPublicViewerContextToken(contextToken || null)
+        })
+        .catch(() => {
+          if (!cancelled) setPublicViewerContextToken(null)
+        })
+    } else {
+      setPublicViewerContextToken(current?._viewerContextToken || null)
+    }
+
+    return () => {
+      cancelled = true
+    }
+  }, [current, ensureViewerContextToken])
 
   // Whenever we open a new audio file, it becomes the background audio
   useEffect(() => {
@@ -401,6 +453,26 @@ export default function PreviewModal({ open, file, files = [], onClose }) {
   const cat     = activeFile ? getMimeCategory(activeFile.mimeType, activeFile.fileName) : ''
   const palette = PALETTE[cat] || PALETTE.other
   const src     = getPreviewUrl(activeFile)
+  const activeViewerContextToken = activeFile?._publicToken
+    ? publicViewerContextToken
+    : (activeFile?._viewerContextToken || null)
+
+  const openDedicatedPlayer = () => {
+    if (!activeFile?._id) return
+
+    if (activeFile._publicToken) {
+      navigate(`/s/${activeFile._publicToken}/video/${activeFile._id}`, {
+        state: {
+          password: activeFile._publicPwd || '',
+        },
+      })
+    } else {
+      navigate(`/view/${activeFile._id}`)
+    }
+
+    if (forceAudioOpen) setForceAudioOpen(false)
+    if (open) onClose()
+  }
 
   // Modal is visible if the user explicitly opened a file (open = true) or expanded audio (forceAudioOpen = true),
   // AND they haven't minimized the CURRENTLY actively viewed file (if it's the background audio)
@@ -418,13 +490,8 @@ export default function PreviewModal({ open, file, files = [], onClose }) {
     if (!open) return
     const handler = (e) => {
       if (e.key === 'Escape') onClose()
-      
-      const isVideo = current && getMimeCategory(current.mimeType, current.fileName) === 'video'
-      // If we are watching a video, let the VideoPlayer explicitly consume Left/Right/Up/Down
-      if (!isVideo) {
-        if (e.key === 'ArrowRight')  goNext()
-        if (e.key === 'ArrowLeft')   goPrev()
-      }
+      if (e.key === 'ArrowRight')  goNext()
+      if (e.key === 'ArrowLeft')   goPrev()
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -463,7 +530,7 @@ export default function PreviewModal({ open, file, files = [], onClose }) {
     if (cat === 'audio') return null // Handled permanently below so it doesn't unmount
     switch (cat) {
       case 'image':   return <ImageViewer src={src} fileName={activeFile.fileName} dark={dark}/>
-      case 'video':   return <VideoPlayer src={src} file={activeFile} dark={dark} onNext={goNext} />
+      case 'video':   return <VideoRoutePrompt file={activeFile} dark={dark} onOpenPlayer={openDedicatedPlayer} />
       case 'pdf':     return <Suspense fallback={<LazySpinner dark={dark}/>}><PdfViewerPro src={src} dark={dark}/></Suspense>
       case 'code':    return <Suspense fallback={<LazySpinner dark={dark}/>}><CodeViewer src={src} fileName={activeFile.fileName} dark={dark}/></Suspense>
       case 'sheet':   return <Suspense fallback={<LazySpinner dark={dark}/>}><SpreadsheetViewer src={src} fileName={activeFile.fileName} dark={dark}/></Suspense>
@@ -614,7 +681,15 @@ export default function PreviewModal({ open, file, files = [], onClose }) {
                         <div className="absolute top-0 right-0 left-0 flex justify-center -mt-2">
                           <span className="bg-black/40 backdrop-blur px-2 py-0.5 rounded text-[8px] uppercase tracking-widest text-white/50 border border-white/10">Advertisement</span>
                         </div>
-                        <AdSlot formatId="2018497" style={{ width: '100%', margin: '0 auto', maxWidth: 728, minHeight: 86 }} />
+                        <AdSlot
+                          formatId="2018497"
+                          style={{ width: '100%', margin: '0 auto', maxWidth: 728, minHeight: 86 }}
+                          tracking={activeViewerContextToken ? {
+                            viewerContextToken: activeViewerContextToken,
+                            slotId: `preview-${activeFile?._id || 'asset'}`,
+                            source: 'public_share_preview_ad',
+                          } : null}
+                        />
                       </div>
                     )}
                   </motion.div>
@@ -673,10 +748,12 @@ export default function PreviewModal({ open, file, files = [], onClose }) {
         open={gateOpen}
         onProceed={() => { setGateOpen(false); doDownload() }}
         onClose={() => setGateOpen(false)}
+        adTracking={activeViewerContextToken ? {
+          viewerContextToken: activeViewerContextToken,
+          slotId: `download-gate-${current?._id || 'asset'}`,
+          source: 'public_share_download_gate',
+        } : null}
       />
     </AnimatePresence>
   )
-
-  if (typeof document === 'undefined') return null
-  return createPortal(previewTree, document.body)
 }

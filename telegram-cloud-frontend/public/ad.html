@@ -5,26 +5,118 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: transparent; overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 50px; }
-  #ad-mount { display: block; text-align: center; width: 100%; }
+  body { background: transparent; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 50px; }
+  .ad-zone { display: block; text-align: center; width: 100%; }
 </style>
 </head>
 <body>
-<div id="ad-mount"></div>
+<div id="2018497" class="ad-zone"></div>
+<div id="2018498" class="ad-zone"></div>
 <script>
-  // Read format ID from URL query parameter
-  var params = new URLSearchParams(window.location.search);
-  var formatId = params.get('f') || '2018497';
-  
-  // Set the mount div's id to the format ID (what MyBid looks for)
-  document.getElementById('ad-mount').id = formatId;
-  
-  // Load MyBid script
-  var s = document.createElement('script');
-  s.async = true;
-  s.src = 'https://js.mbidadm.com/static/scripts.js';
-  s.setAttribute('data-admpid', '433036');
-  document.head.appendChild(s);
+  (function () {
+    var KNOWN_ZONE_IDS = ['2018497', '2018498'];
+    var IGNORED_VENDOR_PATTERNS = [
+      'detectIncognito',
+      'failed to query storage quota',
+      'No banner mount target id found'
+    ];
+
+    function shouldIgnoreVendorNoise(message) {
+      if (typeof message !== 'string') return false;
+
+      return IGNORED_VENDOR_PATTERNS.some(function (pattern) {
+        return message.indexOf(pattern) !== -1;
+      });
+    }
+
+    function filterConsoleMethod(originalMethod) {
+      return function () {
+        var message = Array.prototype.map.call(arguments, function (value) {
+          if (typeof value === 'string') return value;
+
+          try {
+            return JSON.stringify(value);
+          } catch (error) {
+            return String(value);
+          }
+        }).join(' ');
+
+        if (shouldIgnoreVendorNoise(message)) return;
+        originalMethod.apply(console, arguments);
+      };
+    }
+
+    function installConsoleNoiseFilter() {
+      if (window.__tcAdsConsoleFiltered) return;
+
+      console.warn = filterConsoleMethod(console.warn.bind(console));
+      console.error = filterConsoleMethod(console.error.bind(console));
+      window.__tcAdsConsoleFiltered = true;
+    }
+
+    function ensureMountTarget(targetId, prepend) {
+      if (!targetId || document.getElementById(targetId)) return;
+
+      var node = document.createElement('div');
+      node.id = targetId;
+      node.className = 'ad-zone';
+
+      if (prepend && document.body.firstChild) {
+        document.body.insertBefore(node, document.body.firstChild);
+        return;
+      }
+
+      document.body.appendChild(node);
+    }
+
+    function buildMountTargets() {
+      var params = new URLSearchParams(window.location.search);
+      var requestedFormatId = (params.get('f') || '').trim();
+
+      ensureMountTarget('2018497');
+      ensureMountTarget('2018498');
+
+      if (requestedFormatId && KNOWN_ZONE_IDS.indexOf(requestedFormatId) === -1) {
+        ensureMountTarget(requestedFormatId, true);
+      }
+    }
+
+    function loadVendorScript() {
+      if (document.querySelector('script[data-telecloud-mybid="true"]')) return;
+
+      var script = document.createElement('script');
+      script.async = true;
+      script.src = 'https://js.mbidadm.com/static/scripts.js';
+      script.setAttribute('data-admpid', '433036');
+      script.dataset.telecloudMybid = 'true';
+      document.head.appendChild(script);
+    }
+
+    function bootstrapAdDocument() {
+      installConsoleNoiseFilter();
+      buildMountTargets();
+      loadVendorScript();
+    }
+
+    window.addEventListener('error', function (event) {
+      var message = event && (event.message || (event.error && event.error.message) || '');
+      if (!shouldIgnoreVendorNoise(message)) return;
+      event.preventDefault();
+    });
+
+    window.addEventListener('unhandledrejection', function (event) {
+      var reason = event && event.reason;
+      var message = reason && (reason.message || reason.toString && reason.toString()) || '';
+      if (!shouldIgnoreVendorNoise(message)) return;
+      event.preventDefault();
+    });
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', bootstrapAdDocument, { once: true });
+    } else {
+      bootstrapAdDocument();
+    }
+  })();
 </script>
 </body>
 </html>

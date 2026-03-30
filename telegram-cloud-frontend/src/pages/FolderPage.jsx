@@ -290,6 +290,7 @@ export default function FolderPage() {
                           <motion.div key={f._id} variants={itemVariants} layout>
                             <FileCard file={f}
                               onPreview={f => isExpired ? toast.error('Renew subscription to preview files') : setPreview(f)}
+                              onOpenVideo={f => isExpired ? toast.error('Renew subscription to stream videos') : navigate(`/view/${f._id}`)}
                               onShare={f => isExpired ? toast.error('Renew subscription to share') : setShare(f)}
                               onDelete={f => setToDelete({ ...f, type: 'file' })}
                               onDragStateChange={setIsDraggingFile}

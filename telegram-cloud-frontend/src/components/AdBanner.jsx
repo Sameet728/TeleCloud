@@ -1,11 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import { monetizationAPI } from '../services/api'
 import { useSubscription } from '../store/useSubscription'
 import useStore from '../store/useStore'
 
-/**
- * useAdGuard — returns true if banner ads should be rendered.
- */
 export function useAdGuard() {
   const { isSubscribed } = useSubscription()
   const { uploads } = useStore()
@@ -18,34 +16,22 @@ export function useAdGuard() {
   return true
 }
 
-/**
- * AdSlot — renders a MyBid banner ad using an isolated iframe.
- *
- * WHY IFRAME:
- * MyBid's scripts.js is designed for static HTML pages, not React SPAs.
- * It scans for mount target divs at init time and auto-loads ALL enabled
- * formats (In-page, Popunder, etc). In a React SPA:
- * - Mount divs don't exist when the script runs
- * - Re-running init() creates duplicate floating ads
- * - Multiple divs with same id cause only the first to receive the ad
- *
- * SOLUTION:
- * Each AdSlot loads /ad.html?f=FORMAT_ID in an iframe.
- * ad.html is a tiny static page that:
- * 1. Creates <div id="FORMAT_ID"> (the mount target)
- * 2. Loads the MyBid script AFTER the div exists
- * 3. MyBid finds the div and injects the banner
- *
- * Each iframe is fully isolated — its own DOM, its own MyBid instance,
- * no conflicts with the parent page, and no duplicate format loading.
- *
- * formatId:
- *   2018497 – Banner 300x100
- *   2018498 – Banner 300x250
- */
-export default function AdSlot({ formatId, style = {}, className = '', refreshMs = 0 }) {
+export default function AdSlot({
+  formatId,
+  style = {},
+  className = '',
+  refreshMs = 0,
+  tracking = null,
+}) {
   const [refreshKey, setRefreshKey] = useState(0)
+  const [iframeLoaded, setIframeLoaded] = useState(false)
+  const [isVisible, setIsVisible] = useState(false)
+  const [impressionTracked, setImpressionTracked] = useState(false)
+  const [clickTracked, setClickTracked] = useState(false)
+  const containerRef = useRef(null)
+  const blurArmRef = useRef(0)
   const iframeHeight = style.height ?? 100
+  const slotId = tracking?.slotId || `${formatId}-${refreshKey}`
 
   useEffect(() => {
     if (!refreshMs) return undefined
@@ -57,8 +43,80 @@ export default function AdSlot({ formatId, style = {}, className = '', refreshMs
     return () => window.clearInterval(intervalId)
   }, [formatId, refreshMs])
 
+  useEffect(() => {
+    setIframeLoaded(false)
+    setIsVisible(false)
+    setImpressionTracked(false)
+    setClickTracked(false)
+    blurArmRef.current = 0
+  }, [tracking?.viewerContextToken, refreshKey])
+
+  useEffect(() => {
+    if (!tracking?.viewerContextToken || !containerRef.current) return undefined
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0]
+        setIsVisible(Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.5))
+      },
+      { threshold: [0.5] }
+    )
+
+    observer.observe(containerRef.current)
+    return () => observer.disconnect()
+  }, [tracking?.viewerContextToken, refreshKey])
+
+  useEffect(() => {
+    if (!tracking?.viewerContextToken || !iframeLoaded || !isVisible || impressionTracked) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        await monetizationAPI.trackImpression({
+          viewerContextToken: tracking.viewerContextToken,
+          slotId,
+          source: tracking.source || 'public_share_ad',
+        })
+        setImpressionTracked(true)
+      } catch {}
+    }, 800)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [iframeLoaded, impressionTracked, isVisible, slotId, tracking])
+
+  useEffect(() => {
+    if (!tracking?.viewerContextToken || clickTracked) return undefined
+
+    const handleBlur = () => {
+      if (!blurArmRef.current || clickTracked) return
+      if (Date.now() - blurArmRef.current > 1500) return
+
+      blurArmRef.current = 0
+      monetizationAPI.trackClick({
+        viewerContextToken: tracking.viewerContextToken,
+        slotId,
+        source: tracking.source || 'public_share_ad_click',
+      }).then(() => {
+        setClickTracked(true)
+      }).catch(() => {})
+    }
+
+    const handleFocus = () => {
+      blurArmRef.current = 0
+    }
+
+    window.addEventListener('blur', handleBlur)
+    window.addEventListener('focus', handleFocus)
+    return () => {
+      window.removeEventListener('blur', handleBlur)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [clickTracked, slotId, tracking])
+
   return (
     <div
+      ref={containerRef}
       className={`ad-slot-container ${className}`}
       style={{
         display: 'block',
@@ -67,11 +125,16 @@ export default function AdSlot({ formatId, style = {}, className = '', refreshMs
         minHeight: 50,
         ...style,
       }}
+      onPointerDown={() => {
+        if (!tracking?.viewerContextToken || clickTracked) return
+        blurArmRef.current = Date.now()
+      }}
     >
       <iframe
         key={`${formatId}-${refreshKey}`}
         src={`/ad.html?f=${formatId}&r=${refreshKey}`}
         loading="lazy"
+        onLoad={() => setIframeLoaded(true)}
         style={{
           border: 'none',
           width: '100%',
@@ -82,7 +145,7 @@ export default function AdSlot({ formatId, style = {}, className = '', refreshMs
         scrolling="no"
         frameBorder="0"
         title="Advertisement"
-        sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+        sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
       />
     </div>
   )

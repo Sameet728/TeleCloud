@@ -15,7 +15,7 @@ import UI_LAYERS from '../constants/uiLayers'
  */
 const COUNTDOWN = 5 // seconds before skip appears
 
-export default function DownloadAdGate({ open, onProceed, onClose }) {
+export default function DownloadAdGate({ open, onProceed, onClose, adTracking = null }) {
   const canShow = useAdGuard()
   const [seconds, setSeconds] = useState(COUNTDOWN)
   const [canSkip, setCanSkip] = useState(false)
@@ -76,7 +76,11 @@ export default function DownloadAdGate({ open, onProceed, onClose }) {
               </span>
             </div>
             <div className="flex min-h-[240px] items-center justify-center bg-gray-950 p-3.5">
-              <AdSlot formatId="2018497" style={{ width: 300, height: 100 }} />
+              <AdSlot
+                formatId="2018497"
+                style={{ width: 300, height: 100 }}
+                tracking={adTracking}
+              />
             </div>
           </div>
 

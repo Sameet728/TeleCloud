@@ -1,7 +1,12 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
-export default function ProtectedRoute({ children, requireTelegram = true }) {
+export default function ProtectedRoute({
+  children,
+  requireTelegram = true,
+  requireAdmin = false,
+  ignoreTelegram = false,
+}) {
   const { user, loading } = useAuth()
 
   if (loading) return (
@@ -12,10 +17,14 @@ export default function ProtectedRoute({ children, requireTelegram = true }) {
 
   if (!user) return <Navigate to="/login" replace />
 
-  if (requireTelegram && !user.isTelegramConnected)
+  if (requireAdmin && user.role !== 'admin') {
+    return <Navigate to={user.isTelegramConnected ? '/dashboard' : '/connect-telegram'} replace />
+  }
+
+  if (!ignoreTelegram && requireTelegram && !user.isTelegramConnected)
     return <Navigate to="/connect-telegram" replace />
 
-  if (!requireTelegram && user.isTelegramConnected)
+  if (!ignoreTelegram && !requireTelegram && user.isTelegramConnected)
     return <Navigate to="/dashboard" replace />
 
   return children

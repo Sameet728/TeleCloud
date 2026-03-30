@@ -21,7 +21,10 @@ export default function MainLayout() {
 
   // Hide navbar on Profile and Pricing pages
   const hideNavbar = ['/profile', '/pricing'].includes(location.pathname)
-  const hideMobileNav = hideNavbar || location.pathname.startsWith('/view/')
+  const hideMobileNav =
+    hideNavbar ||
+    location.pathname.startsWith('/view/') ||
+    location.pathname.startsWith('/admin')
 
   useEffect(() => {
     window.localStorage.setItem('telecloud-sidebar-collapsed', String(sidebarCollapsed))

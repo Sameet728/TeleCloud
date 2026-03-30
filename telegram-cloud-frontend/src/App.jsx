@@ -9,12 +9,17 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import ConnectTelegram from './pages/ConnectTelegram'
 import Dashboard from './pages/Dashboard'
+import AnalyticsDashboard from './pages/AnalyticsDashboard'
 import Files from './pages/Files'
 import FolderPage from './pages/FolderPage'
 import Shared from './pages/Shared'
 import PublicShare from './pages/PublicShare'
+import PublicVideoPlayerPage from './pages/PublicVideoPlayerPage'
 import Pricing from './pages/Pricing'
 import Profile from './pages/Profile'
+import WalletPage from './pages/WalletPage'
+import WithdrawalsPage from './pages/WithdrawalsPage'
+import AdminMonetization from './pages/AdminMonetization'
 import Music from './pages/Music'
 import MusicPlaylists from './pages/MusicPlaylists'
 import Terms from './pages/Terms'
@@ -37,8 +42,10 @@ export default function App() {
               <ProtectedRoute requireTelegram={false}><ConnectTelegram /></ProtectedRoute>
             } />
             <Route path="/s/:token" element={<PublicShare />} />
+            <Route path="/s/:token/video/:fileId" element={<PublicVideoPlayerPage />} />
             <Route element={<ProtectedRoute requireTelegram><MainLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/dashboard/analytics" element={<AnalyticsDashboard />} />
               <Route path="/files" element={<Files />} />
               <Route path="/starred" element={<Files filter="starred" />} />
               <Route path="/images" element={<Files filter="images" />} />
@@ -47,9 +54,14 @@ export default function App() {
               <Route path="/shared" element={<Shared />} />
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/wallet" element={<WalletPage />} />
+              <Route path="/withdrawals" element={<WithdrawalsPage />} />
               <Route path="/music" element={<Music />} />
               <Route path="/music/playlists" element={<MusicPlaylists />} />
-              <Route path="/view/:fileId" element={<FileViewPage />} />
+              <Route path="/view/:id" element={<FileViewPage />} />
+            </Route>
+            <Route element={<ProtectedRoute requireAdmin ignoreTelegram><MainLayout /></ProtectedRoute>}>
+              <Route path="/admin" element={<AdminMonetization />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

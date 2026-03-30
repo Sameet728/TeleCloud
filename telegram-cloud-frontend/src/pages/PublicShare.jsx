@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Lock, Download, AlertCircle, LayoutGrid, 
   Archive, Folder as FolderIcon, Eye, ArrowRight, ShieldCheck 
 } from 'lucide-react'
-import { publicAPI } from '../services/api'
+import { publicAPI, monetizationAPI } from '../services/api'
 import FileIcon from '../utils/fileIcons'
 import { formatBytes, formatDate } from '../utils/helpers'
+import { getViewerSessionId } from '../utils/viewerSession'
 import PreviewModal from '../components/PreviewModal'
 import DownloadAdGate from '../components/DownloadAdGate'
 import AdSlot, { useAdGuard } from '../components/AdBanner'
@@ -32,6 +33,7 @@ const LoadingSpinner = () => (
 
 export default function PublicShare() {
   const { token } = useParams()
+  const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -42,6 +44,8 @@ export default function PublicShare() {
   const [previewFile, setPreviewFile] = useState(null)
   const [gateOpen, setGateOpen] = useState(false)
   const [pendingFileId, setPendingFileId] = useState(null)
+  const [viewerContextTokens, setViewerContextTokens] = useState({})
+  const [pendingViewerContextToken, setPendingViewerContextToken] = useState(null)
   const canShowAds = useAdGuard()
 
   const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
@@ -67,6 +71,34 @@ export default function PublicShare() {
 
   useEffect(() => { fetchInfo() }, [token])
 
+  const ensureViewerContextToken = useCallback(async (targetFile, source = 'public_share_view') => {
+    if (!targetFile?._id) return null
+
+    const existingToken = viewerContextTokens[targetFile._id] || targetFile._viewerContextToken
+    if (existingToken) return existingToken
+
+    try {
+      const response = await monetizationAPI.trackView({
+        shareToken: token,
+        fileId: data?.type === 'folder' ? targetFile._id : undefined,
+        source,
+        viewerSessionId: getViewerSessionId(),
+      })
+      const nextToken = response?.data?.data?.viewerContextToken || null
+      if (nextToken) {
+        setViewerContextTokens(prev => ({ ...prev, [targetFile._id]: nextToken }))
+      }
+      return nextToken
+    } catch {
+      return null
+    }
+  }, [data?.type, token, viewerContextTokens])
+
+  useEffect(() => {
+    if (!data || data.type !== 'file') return
+    ensureViewerContextToken(data.file, 'public_share_open')
+  }, [data, ensureViewerContextToken])
+
   const doDownload = useCallback((fileId = null) => {
     let url = `${baseUrl}/public/download/${token}`
     const params = new URLSearchParams()
@@ -76,7 +108,15 @@ export default function PublicShare() {
     window.location.href = url
   }, [baseUrl, token, password])
 
-  const handleDownload = (fileId = null) => {
+  const handleDownload = async (fileId = null) => {
+    const targetFile = data?.type === 'folder'
+      ? data.files.find((file) => file._id === fileId)
+      : data?.file
+    const contextToken = targetFile
+      ? await ensureViewerContextToken(targetFile, 'public_share_download')
+      : null
+    setPendingViewerContextToken(contextToken)
+
     if (canShowAds) {
       setPendingFileId(fileId)
       setGateOpen(true)
@@ -84,6 +124,14 @@ export default function PublicShare() {
       doDownload(fileId)
     }
   }
+
+  const openPublicVideo = useCallback(async (targetFile) => {
+    if (!targetFile?._id) return
+    await ensureViewerContextToken(targetFile, 'public_share_video_open')
+    navigate(`/s/${token}/video/${targetFile._id}`, {
+      state: { password }
+    })
+  }, [ensureViewerContextToken, navigate, password, token])
 
   // --- Rendering States ---
 
@@ -157,6 +205,7 @@ export default function PublicShare() {
           open={true} 
           file={{...previewFile, _publicToken: token, _publicPwd: password }} 
           files={data.type === 'folder' ? data.files.map(f => ({...f, _publicToken: token, _publicPwd: password})) : []}
+          ensureViewerContextToken={ensureViewerContextToken}
           onClose={() => setPreviewFile(null)} 
         />
       )}
@@ -195,12 +244,21 @@ export default function PublicShare() {
               </div>
 
               <div className="flex flex-col sm:flex-row justify-center gap-3">
-                <button 
-                  onClick={() => setPreviewFile(data.file)} 
+                {String(data.file.mimeType || '').startsWith('video/') ? (
+                  <button
+                    onClick={() => openPublicVideo(data.file)}
                     className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-6 py-2.5 text-[13px] font-bold shadow-sm transition-all hover:bg-gray-50 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700/80"
-                >
-                  <Eye size={16} /> Preview
-                </button>
+                  >
+                    <Eye size={16} /> Open Player
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => setPreviewFile(data.file)} 
+                    className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-6 py-2.5 text-[13px] font-bold shadow-sm transition-all hover:bg-gray-50 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700/80"
+                  >
+                    <Eye size={16} /> Preview
+                  </button>
+                )}
                 {data.shareParams?.allowDownload && (
                   <button 
                     onClick={() => handleDownload()} 
@@ -217,7 +275,14 @@ export default function PublicShare() {
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative z-10 mt-6 flex w-full max-w-3xl justify-center">
                 <div className="relative flex w-full justify-center overflow-hidden rounded-[1.25rem] border border-gray-200/50 bg-white/40 p-2 pt-4 shadow-sm backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/40">
                   <span className="absolute top-0 left-1/2 -translate-x-1/2 -mt-1 bg-zinc-200 dark:bg-zinc-800 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-b shadow-sm text-zinc-500 dark:text-zinc-400 z-10">Advertisement</span>
-                  <AdSlot formatId="2018497" />
+                  <AdSlot
+                    formatId="2018497"
+                    tracking={viewerContextTokens[data.file._id] ? {
+                      viewerContextToken: viewerContextTokens[data.file._id],
+                      slotId: `public-share-file-${data.file._id}`,
+                      source: 'public_share_single_file_ad',
+                    } : null}
+                  />
                 </div>
               </motion.div>
             )}
@@ -281,10 +346,12 @@ export default function PublicShare() {
                       {/* Hover Action Overlay */}
                       <div className="absolute inset-x-0 bottom-0 p-2 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all bg-gradient-to-t from-white via-white dark:from-zinc-900 dark:via-zinc-900 to-transparent pt-6 flex gap-1.5">
                         <button 
-                          onClick={() => setPreviewFile(f)} 
+                          onClick={() => String(f.mimeType || '').startsWith('video/')
+                            ? openPublicVideo(f)
+                            : setPreviewFile(f)} 
                           className="flex-1 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-[10px] font-bold rounded-md transition-colors"
                         >
-                          View
+                          {String(f.mimeType || '').startsWith('video/') ? 'Open' : 'View'}
                         </button>
                         {data.shareParams?.allowDownload && (
                           <button 
@@ -317,6 +384,11 @@ export default function PublicShare() {
         open={gateOpen}
         onProceed={() => { setGateOpen(false); doDownload(pendingFileId) }}
         onClose={() => setGateOpen(false)}
+        adTracking={pendingViewerContextToken ? {
+          viewerContextToken: pendingViewerContextToken,
+          slotId: `public-share-download-${pendingFileId || data?.file?._id || 'asset'}`,
+          source: 'public_share_download_gate',
+        } : null}
       />
     </div>
   )

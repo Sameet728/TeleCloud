@@ -3,10 +3,10 @@ import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { 
   Files, HardDrive, Folder, ArrowRight, 
-  ExternalLink, Zap, ShieldCheck, AlertCircle, Plus
+  ExternalLink, Zap, ShieldCheck, AlertCircle, Plus, BarChart3, Wallet
 } from 'lucide-react'
 import { dashboardAPI } from '../services/api'
-import { formatBytes, formatDate } from '../utils/helpers'
+import { formatBytes, formatCurrency, formatDate } from '../utils/helpers'
 import FileIcon from '../utils/fileIcons'
 import { SkeletonList } from '../components/SkeletonCard'
 import { useSubscription } from '../store/useSubscription'
@@ -147,6 +147,56 @@ export default function Dashboard() {
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        
+        <motion.div variants={itemVariants} className="lg:col-span-3">
+          <div className="app-panel overflow-hidden">
+            <div className="grid gap-4 px-5 py-5 lg:grid-cols-[1.25fr_0.85fr] lg:items-center">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-500">Creator Monetization</p>
+                <h2 className="mt-2 text-xl font-bold tracking-tight text-gray-900 dark:text-white">
+                  Estimated earnings now live in your workspace
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
+                  Track impressions, estimated earnings, wallet balance, and pending withdrawals from the new creator analytics suite.
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+                <div className="rounded-[1.4rem] border border-indigo-100 bg-indigo-50/80 p-4 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-2xl bg-white/80 p-2.5 text-indigo-600 shadow-sm dark:bg-white/10 dark:text-indigo-300">
+                      <BarChart3 size={16} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">Total Earned</p>
+                      <p className="mt-1 text-lg font-bold text-gray-900 dark:text-white">{formatCurrency(stats?.totalEarned)}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-[1.4rem] border border-emerald-100 bg-emerald-50/80 p-4 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-2xl bg-white/80 p-2.5 text-emerald-600 shadow-sm dark:bg-white/10 dark:text-emerald-300">
+                      <Wallet size={16} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">Wallet Balance</p>
+                      <p className="mt-1 text-lg font-bold text-gray-900 dark:text-white">{formatCurrency(stats?.walletBalance)}</p>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigate('/dashboard/analytics')}
+                  className="group flex items-center justify-between rounded-[1.4rem] border border-gray-200 bg-white p-4 text-left transition-all hover:border-indigo-300 hover:bg-indigo-50/60 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-500/40 dark:hover:bg-zinc-900"
+                >
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">Open Analytics</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">See file-level performance</p>
+                  </div>
+                  <ArrowRight size={16} className="text-zinc-400 transition-transform group-hover:translate-x-1 group-hover:text-indigo-500" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
         
         {/* Recent Files Table - Spans 2 columns on large screens */}
         <div className="lg:col-span-2 space-y-3">

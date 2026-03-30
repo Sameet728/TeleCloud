@@ -1,8 +1,15 @@
 import axios from 'axios'
 
+const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000',
+  baseURL,
   timeout: 0, // No timeout — large file uploads can take minutes
+})
+
+const publicApi = axios.create({
+  baseURL,
+  timeout: 0,
 })
 
 // Attach JWT to every request
@@ -40,20 +47,21 @@ export const authAPI = {
 // ── Files ─────────────────────────────────────────────────────────
 export const filesAPI = {
   list:       (params) => api.get('/api/files', { params }),
+  get:        (id) => api.get(`/api/files/${id}`),
   initUpload: (data) => api.post('/api/files/upload/init', data),
   uploadChunk: (formData) => api.post('/api/files/upload/chunk', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 0,
   }),
   finalizeUpload: (data) => api.post('/api/files/upload/finalize', data),
-  downloadUrl:(id) => `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/files/${id}/download?token=${localStorage.getItem('token')}`,
-  preview:    (id) => `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/files/${id}/preview`,
-  thumbnail:  (id) => `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/files/${id}/thumbnail?token=${localStorage.getItem('token')}`,
+  downloadUrl:(id) => `${baseURL}/api/files/${id}/download?token=${localStorage.getItem('token')}`,
+  preview:    (id) => `${baseURL}/api/files/${id}/preview`,
+  thumbnail:  (id) => `${baseURL}/api/files/${id}/thumbnail?token=${localStorage.getItem('token')}`,
   delete:     (id) => api.delete(`/api/files/${id}`),
   update:     (id, d) => api.put(`/api/files/${id}`, d),
   bulkDelete: (fileIds) => api.post('/api/files/bulk-delete', { fileIds }),
   getZipToken:(data) => api.post('/api/files/zip-token', data),
-  downloadZip:(token) => `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/files/download-zip?token=${token}`,
+  downloadZip:(token) => `${baseURL}/api/files/download-zip?token=${token}`,
   move:       (data) => api.post('/api/files/move', data),
 }
 
@@ -84,13 +92,31 @@ export const telegramAPI = {
 
 // ── Public ────────────────────────────────────────────────────────
 export const publicAPI = {
-  getInfo: (token, pwd) => axios.get(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/public/info/${token}`, {
+  getInfo: (token, pwd) => publicApi.get(`/public/info/${token}`, {
     headers: { ...(pwd ? { 'X-Share-Password': pwd } : {}) }
   }),
 }
 
 // ── Dashboard / Search ────────────────────────────────────────────
 export const dashboardAPI = { get:    () => api.get('/api/dashboard') }
+export const analyticsAPI = { get:    (params) => api.get('/api/analytics', { params }) }
+export const walletAPI    = { get:    () => api.get('/api/wallet') }
+export const withdrawalAPI = {
+  list:   () => api.get('/api/withdraw'),
+  create: (data) => api.post('/api/withdraw', data),
+}
+export const monetizationAPI = {
+  trackView:       (data) => publicApi.post('/api/monetization/view', data),
+  trackImpression: (data) => publicApi.post('/api/monetization/impression', data),
+  trackClick:      (data) => publicApi.post('/api/monetization/click', data),
+}
+export const adminMonetizationAPI = {
+  updateRevenue:    (data) => api.post('/api/admin/revenue/update', data),
+  settlements:      () => api.get('/api/admin/revenue/history'),
+  withdrawals:      (params) => api.get('/api/admin/withdrawals', { params }),
+  updateWithdrawal: (id, data) => api.patch(`/api/admin/withdrawals/${id}`, data),
+  users:            (params) => api.get('/api/admin/users', { params }),
+}
 export const searchAPI    = { search: (q) => api.get('/api/search', { params: { q } }) }
 export const musicAPI     = {
   search: (q, limit = 20) => api.get('/api/music/search', { params: { q, limit } }),
@@ -125,12 +151,12 @@ export const musicAPI     = {
   // Includes auth token in URL for HTML5 audio element compatibility
   streamUrl: (videoId) => {
     const token = localStorage.getItem('token');
-    return `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/music/cached/stream?videoId=${encodeURIComponent(videoId)}${token ? `&token=${token}` : ''}`;
+    return `${baseURL}/api/music/cached/stream?videoId=${encodeURIComponent(videoId)}${token ? `&token=${token}` : ''}`;
   },
   
   // Alias kept for callers that still reference the legacy helper name
   legacyStreamUrl: (videoId) =>
-    `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/music/cached/stream?videoId=${encodeURIComponent(videoId)}&token=${localStorage.getItem('token')}`,
+    `${baseURL}/api/music/cached/stream?videoId=${encodeURIComponent(videoId)}&token=${localStorage.getItem('token')}`,
   
   // Cached music endpoints (authenticated via API calls)
   getCachedSong: (videoId) => api.get(`/api/music/cached/song?videoId=${encodeURIComponent(videoId)}`),

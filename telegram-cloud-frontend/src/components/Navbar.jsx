@@ -21,6 +21,24 @@ const routeMeta = [
     hint: 'Monitor storage, activity, and connection health.',
   },
   {
+    match: (pathname) => pathname.startsWith('/wallet'),
+    kicker: 'Revenue',
+    title: 'Creator wallet',
+    hint: 'Track balances, settlement credits, and payout history.',
+  },
+  {
+    match: (pathname) => pathname.startsWith('/withdrawals'),
+    kicker: 'Revenue',
+    title: 'Withdrawal desk',
+    hint: 'Request payouts and keep tabs on approval progress.',
+  },
+  {
+    match: (pathname) => pathname.startsWith('/admin'),
+    kicker: 'Admin',
+    title: 'Monetization console',
+    hint: 'Control settlements, payouts, and top-earner visibility.',
+  },
+  {
     match: (pathname) => pathname.startsWith('/folder/'),
     kicker: 'Workspace',
     title: 'Folder explorer',
@@ -141,7 +159,12 @@ export default function Navbar({ onMenuClick }) {
     clear()
     const cat = getMimeCategory(file.mimeType, file.fileName)
 
-    if (['image', 'video', 'pdf', 'audio', 'code', 'sheet', 'doc'].includes(cat)) {
+    if (cat === 'video') {
+      navigate(`/view/${file._id}`)
+      return
+    }
+
+    if (['image', 'pdf', 'audio', 'code', 'sheet', 'doc'].includes(cat)) {
       setPreviewFile(file)
       return
     }
@@ -301,6 +324,7 @@ export default function Navbar({ onMenuClick }) {
                 {fileResults.files?.map((file) => {
                   const cat = getMimeCategory(file.mimeType, file.fileName)
                   const canPreview = ['image', 'video', 'pdf', 'audio', 'code', 'sheet', 'doc'].includes(cat)
+                  const actionLabel = cat === 'video' ? 'Open Player' : canPreview ? 'Preview' : 'Download'
 
                   return (
                     <motion.button
@@ -328,7 +352,7 @@ export default function Navbar({ onMenuClick }) {
                         }`}
                       >
                         {canPreview ? (
-                          'Preview'
+                          actionLabel
                         ) : (
                           <>
                             <Download size={11} className="mr-1 inline" />

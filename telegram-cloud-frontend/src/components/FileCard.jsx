@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Download, Trash2, Share2, Eye, MoreVertical, CheckSquare, Square, Star } from 'lucide-react'
+import { Download, Trash2, Share2, Eye, MoreVertical, CheckSquare, Square, Star, PlayCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import FileIcon from '../utils/fileIcons'
 import { formatBytes, formatDateShort, truncate, getMimeCategory } from '../utils/helpers'
@@ -9,7 +9,7 @@ import useStore from '../store/useStore'
 import DownloadAdGate from './DownloadAdGate'
 import { useAdGuard } from './AdBanner'
 
-export default function FileCard({ file, onPreview, onShare, onDelete, onDragStateChange, onToggleStar }) {
+export default function FileCard({ file, onPreview, onOpenVideo, onShare, onDelete, onDragStateChange, onToggleStar }) {
   const { selected, toggleSelect } = useStore()
   const isSelected = selected.has(file._id)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -30,8 +30,10 @@ export default function FileCard({ file, onPreview, onShare, onDelete, onDragSta
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [menuOpen])
   
-  const canPreview = ['image','video','pdf','audio','code','sheet','doc'].includes(getMimeCategory(file.mimeType, file.fileName))
-  const isMedia = getMimeCategory(file.mimeType, file.fileName) === 'image'
+  const mimeCategory = getMimeCategory(file.mimeType, file.fileName)
+  const canPreview = ['image','video','pdf','audio','code','sheet','doc'].includes(mimeCategory)
+  const isMedia = mimeCategory === 'image'
+  const isVideo = mimeCategory === 'video'
 
   const doDownload = async () => {
     toast.success('Download starting...')
@@ -75,7 +77,14 @@ export default function FileCard({ file, onPreview, onShare, onDelete, onDragSta
         ${isSelected ? 'ring-2 ring-indigo-500 border-indigo-500/50' : 'border-gray-200/60 dark:border-zinc-800/80'}
         ${isDragging ? 'opacity-40' : ''}
         ${menuOpen ? 'z-50' : 'z-0'}`}
-      onClick={() => canPreview ? onPreview(file) : null}
+      onClick={() => {
+        if (!canPreview) return
+        if (isVideo) {
+          onOpenVideo?.(file)
+          return
+        }
+        onPreview(file)
+      }}
     >
       {/* Select checkbox */}
       <button
@@ -113,9 +122,17 @@ export default function FileCard({ file, onPreview, onShare, onDelete, onDragSta
             onClick={e => e.stopPropagation()}
           >
             {canPreview && (
-              <button onClick={() => { onPreview(file); setMenuOpen(false) }}
+              <button onClick={() => {
+                if (isVideo) {
+                  onOpenVideo?.(file)
+                } else {
+                  onPreview(file)
+                }
+                setMenuOpen(false)
+              }}
                 className="flex items-center gap-3 w-full px-4 py-3 text-sm font-medium text-gray-700 dark:text-zinc-200 hover:bg-gray-50 dark:hover:bg-zinc-800/60 transition-colors">
-                <Eye size={16} /> Preview
+                {isVideo ? <PlayCircle size={16} /> : <Eye size={16} />}
+                {isVideo ? 'Open Player' : 'Preview'}
               </button>
             )}
             <button onClick={(e) => { handleDownload(e); setMenuOpen(false) }}

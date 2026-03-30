@@ -30,7 +30,11 @@ export default function Login() {
     try {
       const user = await login(form.email, form.password)
       toast.success('Authentication successful')
-      navigate(user.isTelegramConnected ? '/dashboard' : '/connect-telegram')
+      if (user.role === 'admin') {
+        navigate('/admin')
+      } else {
+        navigate(user.isTelegramConnected ? '/dashboard' : '/connect-telegram')
+      }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Invalid credentials')
     } finally { setLoading(false) }

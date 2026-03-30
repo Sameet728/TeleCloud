@@ -20,6 +20,13 @@ export const formatDateShort = (date) => {
   }).format(new Date(date))
 }
 
+export const formatCurrency = (value) =>
+  new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 2,
+  }).format(Number(value || 0))
+
 // Map of code-file extensions for syntax highlighting detection
 const CODE_EXTENSIONS = new Set([
   'js','jsx','ts','tsx','json','html','htm','css','scss','less','py','java','c','cpp','h',

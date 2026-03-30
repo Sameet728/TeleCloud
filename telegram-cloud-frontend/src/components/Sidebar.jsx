@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
+import { useTheme } from '../context/ThemeContext'
 import {
   LayoutDashboard,
   FolderOpen,
@@ -20,6 +21,10 @@ import {
   ListMusic,
   PanelLeftClose,
   PanelLeftOpen,
+  BarChart3,
+  Wallet,
+  Banknote,
+  Shield,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { formatBytes } from '../utils/helpers'
@@ -31,8 +36,11 @@ const linkGroups = [
     label: 'Workspace',
     items: [
       { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+      { to: '/dashboard/analytics', icon: BarChart3, label: 'Analytics' },
       { to: '/files', icon: FolderOpen, label: 'My Files' },
       { to: '/shared', icon: Share2, label: 'Shared Links' },
+      { to: '/wallet', icon: Wallet, label: 'Wallet' },
+      { to: '/withdrawals', icon: Banknote, label: 'Withdrawals' },
     ],
   },
   {
@@ -49,6 +57,7 @@ const linkGroups = [
     label: 'Account',
     items: [
       { to: '/pricing', icon: Tag, label: 'Pricing' },
+      { to: '/admin', icon: Shield, label: 'Admin Panel', adminOnly: true },
     ],
   },
 ]
@@ -83,6 +92,7 @@ export default function Sidebar({ open, onClose, collapsed, onToggleCollapsed })
   const [isDesktop, setIsDesktop] = useState(() => (
     typeof window !== 'undefined' ? window.innerWidth >= 1024 : false
   ))
+  const { dark } = useTheme() // Get dark mode state from context
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const canShowAds = useAdGuard()
@@ -103,6 +113,18 @@ export default function Sidebar({ open, onClose, collapsed, onToggleCollapsed })
     : 0
   const effectiveCollapsed = isDesktop && collapsed
   const [showSidebarAd, setShowSidebarAd] = useState(isDesktop)
+  const visibleLinkGroups = linkGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        if (item.adminOnly && user?.role !== 'admin') return false
+        if (user?.role === 'admin' && !user?.isTelegramConnected && !item.adminOnly && item.to !== '/pricing') {
+          return false
+        }
+        return true
+      }),
+    }))
+    .filter((group) => group.items.length > 0)
 
   useEffect(() => {
     const syncViewport = () => setIsDesktop(window.innerWidth >= 1024)
@@ -139,10 +161,12 @@ export default function Sidebar({ open, onClose, collapsed, onToggleCollapsed })
   return (
     <aside
       style={{ zIndex: isDesktop ? UI_LAYERS.sidebar : UI_LAYERS.modal - 8 }}
+      data-dark={dark}
       className={[
         'fixed inset-y-0 left-0 flex h-full flex-col overflow-hidden border-r transition-[width,transform] duration-200 ease-out transform-gpu will-change-transform lg:static',
+        dark ? 'dark' : '', // Explicitly add dark class when dark mode is active
         isDesktop
-          ? 'backdrop-blur-xl border-black/5 bg-white/90 dark:border-white/8 dark:bg-[#0d1118]/92 shadow-[0_20px_44px_-36px_rgba(15,23,42,0.26)] dark:shadow-[0_22px_48px_-38px_rgba(0,0,0,0.48)]'
+          ? 'backdrop-blur-xl border-black/5 bg-white/90 dark:border-white/8 dark:bg-[#0d1118]/95 shadow-[0_20px_44px_-36px_rgba(15,23,42,0.26)] dark:shadow-[0_22px_48px_-38px_rgba(0,0,0,0.48)]'
           : 'border-black/10 bg-white dark:border-white/10 dark:bg-[#0b1020] shadow-[0_18px_42px_-30px_rgba(15,23,42,0.32)] dark:shadow-[0_20px_48px_-30px_rgba(0,0,0,0.58)]',
         effectiveCollapsed ? 'w-[216px] lg:w-[68px]' : 'w-[216px]',
         open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
@@ -206,7 +230,7 @@ export default function Sidebar({ open, onClose, collapsed, onToggleCollapsed })
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto overscroll-contain px-1.5 py-1.5">
-          {linkGroups.map((group) => (
+          {visibleLinkGroups.map((group) => (
             <div key={group.label} className="space-y-0.5">
               {!effectiveCollapsed ? (
                 <p className="px-2.5 pt-1 text-[7.5px] font-bold uppercase tracking-[0.15em] text-zinc-500 dark:text-zinc-300">
