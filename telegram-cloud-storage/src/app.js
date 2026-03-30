@@ -45,7 +45,8 @@ logger.info("Background cleanup service initialized");
 // ── CORS ───────────────────────────────────────────────────────
 const allowedOrigins = [
   "https://telecloud-tau.vercel.app",
-  "http://localhost:5173"
+  "http://localhost:5173",
+  "https://www.sameetpisal.online"
 ];
 
 app.use(cors({
