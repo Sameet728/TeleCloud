@@ -51,6 +51,30 @@ const fileSchema = new mongoose.Schema(
       required: true,
       index:    true,
     },
+    views: {
+      type: Number,
+      default: 0,
+    },
+    impressions: {
+      type: Number,
+      default: 0,
+    },
+    clicks: {
+      type: Number,
+      default: 0,
+    },
+    estimatedRevenue: {
+      type: Number,
+      default: 0,
+    },
+    userEarning: {
+      type: Number,
+      default: 0,
+    },
+    lastSettledDate: {
+      type: String,
+      default: null,
+    },
   },
   { timestamps: true }
 );

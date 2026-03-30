@@ -23,6 +23,12 @@ const userSchema = new mongoose.Schema(
       minlength: [8, "Password must be at least 8 characters"],
       select:   false, // Never return password in queries by default
     },
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "user",
+      index: true,
+    },
     // Telegram account details (filled after Telegram auth)
     telegramId: {
       type:    String,
@@ -66,6 +72,27 @@ const userSchema = new mongoose.Schema(
     lastFetchedMessageId: {
       type:    Number,
       default: 0, // Used for incremental Telegram sync
+    },
+    walletBalance: {
+      type: Number,
+      default: 0,
+    },
+    pendingWithdrawalBalance: {
+      type: Number,
+      default: 0,
+    },
+    totalEarned: {
+      type: Number,
+      default: 0,
+    },
+    totalWithdrawn: {
+      type: Number,
+      default: 0,
+    },
+    defaultUpiId: {
+      type: String,
+      default: null,
+      trim: true,
     },
   },
   { timestamps: true }

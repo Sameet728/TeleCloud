@@ -51,12 +51,13 @@ exports.register = asyncHandler(async (req, res) => {
 // ── Login ─────────────────────────────────────────────────────────
 exports.login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
+  const normalizedEmail = String(email || "").trim().toLowerCase();
 
   if (!email || !password) {
     return sendError(res, "Email and password are required", 400);
   }
 
-  const user = await User.findOne({ email }).select("+password");
+  const user = await User.findOne({ email: normalizedEmail }).select("+password");
   if (!user || !(await user.comparePassword(password))) {
     return sendError(res, "Invalid email or password", 401);
   }

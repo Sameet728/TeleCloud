@@ -17,6 +17,7 @@ router.post("/bulk-delete",  ctrl.bulkDelete);
 router.post("/zip-token",    ctrl.getZipToken);
 router.get("/download-zip",  ctrl.downloadZip);
 router.post("/move",         ctrl.moveFiles);
+router.get("/:id",           ctrl.getFile);
 router.get("/:id/download",  ctrl.downloadFile);
 router.get("/:id/preview",   ctrl.previewFile);
 router.get("/:id/thumbnail", ctrl.getThumbnail);

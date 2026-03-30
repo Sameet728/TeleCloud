@@ -18,6 +18,11 @@ const searchRoutes = require("./routes/search");
 const musicRoutes = require("./routes/music");
 const publicRoutes = require("./routes/public");
 const telegramRoutes = require("./routes/telegram");
+const monetizationRoutes = require("./routes/monetization");
+const analyticsRoutes = require("./routes/analytics");
+const walletRoutes = require("./routes/wallet");
+const withdrawRoutes = require("./routes/withdraw");
+const adminRoutes = require("./routes/admin");
 const errorHandler = require("./middleware/errorHandler");
 const handleTelegramError = require("./middleware/handleTelegramError");
 const logger = require("./utils/logger");
@@ -26,6 +31,7 @@ const checkStorageLimit = require("./middleware/checkStorageLimit");
 const cleanupService = require("./services/cleanupService");
 
 const app = express();
+app.set("trust proxy", 1);
 
 // Start background cleanup service
 cleanupService.start();
@@ -43,22 +49,8 @@ logger.info("Background cleanup service initialized");
 
 
 // ── CORS ───────────────────────────────────────────────────────
-const allowedOrigins = [
-  "https://telecloud-tau.vercel.app",
-  "http://localhost:5173",
-  "https://www.sameetpisal.online"
-];
-
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true); // allow Postman / curl
-
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      return callback(new Error("CORS not allowed"));
-    }
-  },
+  origin: true,  // reflect any origin (dev + prod)
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: [
     "Content-Type",
@@ -77,10 +69,7 @@ app.use(cors({
   credentials: true,
 }));
 
-app.options("*", cors({
-  origin: allowedOrigins,
-  credentials: true
-}));
+app.options("*", cors());
 
 
 
@@ -132,6 +121,11 @@ app.use("/api/search", searchRoutes);
 app.use("/api/music", musicRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/telegram", telegramRoutes);
+app.use("/api/monetization", monetizationRoutes);
+app.use("/api/analytics", analyticsRoutes);
+app.use("/api/wallet", walletRoutes);
+app.use("/api/withdraw", withdrawRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/public", publicRoutes);
 
 
@@ -153,4 +147,3 @@ app.use(handleTelegramError);
 app.use(errorHandler);
 
 module.exports = app;
-

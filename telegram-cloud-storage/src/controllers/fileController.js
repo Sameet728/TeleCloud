@@ -166,6 +166,13 @@ exports.finalizeUpload = asyncHandler(async (req, res, next) => {
 });
 
 // ── Download file ─────────────────────────────────────────────────
+exports.getFile = asyncHandler(async (req, res) => {
+  const file = await File.findOne({ _id: req.params.id, userId: req.user._id });
+  if (!file) return sendError(res, "File not found", 404);
+
+  sendSuccess(res, { file }, "File retrieved");
+});
+
 exports.downloadFile = asyncHandler(async (req, res) => {
   const file = await File.findOne({ _id: req.params.id, userId: req.user._id });
   if (!file) return sendError(res, "File not found", 404);
